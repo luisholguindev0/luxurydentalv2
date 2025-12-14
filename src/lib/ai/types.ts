@@ -32,6 +32,7 @@ export interface ConversationContext {
     messages: AIMessage[]
     appointments: AppointmentContext[]
     services: ServiceInfo[]
+    clinicConfig: ClinicConfig
     lastCancellation?: {
         date: string
         reason: string | null

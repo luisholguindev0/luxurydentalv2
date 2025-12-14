@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js"
 import { addMinutes, format, parse, isAfter, isBefore, startOfDay, endOfDay } from "date-fns"
 import { toZonedTime, fromZonedTime } from "date-fns-tz"
 import type { Database } from "@/types/database"
-import type { Contact } from "./types"
+import type { Contact, ClinicConfig } from "./types"
 import type { ToolDefinition } from "./deepseek"
 
 // Supabase admin client for AI operations
@@ -22,16 +22,7 @@ function getAdminClient() {
 
 const TIMEZONE = "America/Bogota"
 
-// Business hours per day (0 = Sunday)
-const BUSINESS_HOURS: Record<number, { open: string; close: string } | null> = {
-    0: null,                              // Sunday - CLOSED
-    1: { open: "08:00", close: "18:00" }, // Monday
-    2: { open: "08:00", close: "18:00" }, // Tuesday
-    3: { open: "08:00", close: "18:00" }, // Wednesday
-    4: { open: "08:00", close: "18:00" }, // Thursday
-    5: { open: "08:00", close: "18:00" }, // Friday
-    6: { open: "08:00", close: "14:00" }, // Saturday
-}
+
 
 // ============================================================================
 // Tool Schemas (for DeepSeek)
@@ -179,6 +170,7 @@ export interface ToolResult {
 type ToolContext = {
     contact: Contact
     organizationId: string
+    clinicConfig: ClinicConfig
 }
 
 /**
@@ -225,10 +217,10 @@ async function getAvailableSlots(date: string, ctx: ToolContext): Promise<ToolRe
     }
 
     const dayOfWeek = parsedDate.getDay()
-    const hours = BUSINESS_HOURS[dayOfWeek]
+    const schedule = ctx.clinicConfig.businessHours.find(h => h.dayOfWeek === dayOfWeek)
 
-    if (!hours) {
-        return { success: false, message: "El consultorio está cerrado los domingos." }
+    if (!schedule || schedule.isClosed) {
+        return { success: false, message: "El consultorio está cerrado este día." }
     }
 
     // Get existing appointments
@@ -245,11 +237,11 @@ async function getAvailableSlots(date: string, ctx: ToolContext): Promise<ToolRe
 
     // Generate all 30-min slots
     const allSlots: string[] = []
-    let currentTime = parse(hours.open, "HH:mm", parsedDate)
-    const closeTime = parse(hours.close, "HH:mm", parsedDate)
+    let currentTime = parse(schedule.openTime, "HH:mm", parsedDate)
+    const closeTime = parse(schedule.closeTime, "HH:mm", parsedDate)
 
     while (isBefore(addMinutes(currentTime, 30), closeTime) ||
-        format(addMinutes(currentTime, 30), "HH:mm") === hours.close) {
+        format(addMinutes(currentTime, 30), "HH:mm") === schedule.closeTime) {
         allSlots.push(format(currentTime, "HH:mm"))
         currentTime = addMinutes(currentTime, 30)
     }
@@ -326,17 +318,18 @@ async function bookAppointment(
     const endTime = addMinutes(startTime, service.duration_minutes)
 
     // Validate business hours
-    const dayOfWeek = toZonedTime(startTime, TIMEZONE).getDay()
-    const bizHours = BUSINESS_HOURS[dayOfWeek]
-    if (!bizHours) {
+    const dayOfWeek = parsedDate.getDay()
+    const schedule = ctx.clinicConfig.businessHours.find(h => h.dayOfWeek === dayOfWeek)
+
+    if (!schedule || schedule.isClosed) {
         return { success: false, message: "El consultorio está cerrado ese día." }
     }
 
     const timeStr = format(toZonedTime(startTime, TIMEZONE), "HH:mm")
     const endTimeStr = format(toZonedTime(endTime, TIMEZONE), "HH:mm")
 
-    if (timeStr < bizHours.open || endTimeStr > bizHours.close) {
-        return { success: false, message: `El horario de atención es de ${bizHours.open} a ${bizHours.close}.` }
+    if (timeStr < schedule.openTime || endTimeStr > schedule.closeTime) {
+        return { success: false, message: `El horario de atención es de ${toAMPM(schedule.openTime)} a ${toAMPM(schedule.closeTime)}.` }
     }
 
     // Check conflicts
@@ -556,6 +549,9 @@ function parseDate(dateStr: string): Date | null {
     return null
 }
 
+
+// ... existing helpers ...
+
 function parseTime(timeStr: string): string | null {
     const match = timeStr.match(/^(\d{1,2}):(\d{2})$/)
     if (!match) return null
@@ -563,4 +559,11 @@ function parseTime(timeStr: string): string | null {
     const minutes = parseInt(match[2], 10)
     if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
     return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
+}
+
+function toAMPM(time: string): string {
+    const [h, m] = time.split(":").map(Number)
+    const ampm = h >= 12 ? "PM" : "AM"
+    const hour = h % 12 || 12
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`
 }

@@ -22,7 +22,7 @@ const MAX_TOOL_ITERATIONS = 5
  * Build the system prompt for Luxe
  */
 export function buildSystemPrompt(context: ConversationContext): string {
-    const { contact, appointments, services, lastCancellation } = context
+    const { contact, appointments, services, lastCancellation, clinicConfig } = context
 
     const appointmentsSection = appointments.length > 0
         ? `[MIS CITAS CONFIRMADAS]\n${appointments.map(apt =>
@@ -36,21 +36,26 @@ export function buildSystemPrompt(context: ConversationContext): string {
 
     const servicesSection = services.length > 0
         ? `[SERVICIOS]\n${services.map(s =>
-            `- ${s.title}: $${s.price.toLocaleString()} COP (${s.duration} min)`
+            `- ${s.title}: $${s.price.toLocaleString("es-CO")} COP (${s.duration} min)`
         ).join("\n")}`
         : ""
 
+    // Format business hours
+    const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    const hoursSection = clinicConfig.businessHours.map(h => {
+        const dayName = days[h.dayOfWeek]
+        return `- ${dayName}: ${h.isClosed ? "CERRADO" : `${toAMPM(h.openTime)} - ${toAMPM(h.closeTime)}`}`
+    }).join("\n")
+
     return `# Identidad
-Eres **Luxe**, asistente virtual de Luxury Dental, consultorio odontológico premium en Bogotá.
+Eres **Luxe**, asistente virtual de **${clinicConfig.name}**, consultorio odontológico premium.
 
 # Consultorio
-- Dirección: Carrera 7 #82-86, Bogotá
-- Teléfono: +57 601 555 0123
+- Dirección: ${clinicConfig.address}
+- Teléfono: ${clinicConfig.phone}
 
 # Horarios
-- Lunes a Viernes: 8:00 AM - 6:00 PM
-- Sábados: 8:00 AM - 2:00 PM
-- Domingos: CERRADO
+${hoursSection}
 
 ${servicesSection}
 
@@ -68,7 +73,7 @@ ${cancellationSection}
 **NUNCA** agendas sin conocer el nombre. Si no lo tienes, pregúntalo primero.
 
 ## Herramientas
-- get_available_slots: Ver horarios disponibles
+- get_available_slots: Ver horarios disponibles (automáticamente convierte fechas relativas como "mañana" a fechas reales)
 - book_appointment: Agendar cita
 - cancel_appointment: Cancelar cita
 - reschedule_appointment: Reagendar
@@ -76,7 +81,7 @@ ${cancellationSection}
 - request_human: Pedir ayuda humana
 
 ## Seguridad
-- NUNCA des consejos médicos
+- NUNCA des consejos médicos.
 - Si hay emergencia → request_human
 - Si frustración → ofrece humano
 
@@ -86,6 +91,13 @@ ${cancellationSection}
 - Emojis moderados (✨🦷📅)
 - Confirma antes de ejecutar
 `
+}
+
+function toAMPM(time: string): string {
+    const [h, m] = time.split(":").map(Number)
+    const ampm = h >= 12 ? "PM" : "AM"
+    const hour = h % 12 || 12
+    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`
 }
 
 /**
@@ -124,7 +136,11 @@ export async function processMessage(
     ]
 
     const toolCalls: Array<{ name: string; result: ToolResult }> = []
-    const toolContext = { contact: context.contact, organizationId: context.contact.organizationId }
+    const toolContext = {
+        contact: context.contact,
+        organizationId: context.contact.organizationId,
+        clinicConfig: context.clinicConfig
+    }
 
     try {
         // Agentic loop - keep calling until no more tool calls

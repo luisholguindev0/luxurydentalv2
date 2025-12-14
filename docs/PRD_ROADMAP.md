@@ -822,6 +822,7 @@ Before considering a feature complete:
 | | | - Fixed Supabase join type inference in messages system |
 | | | - Removed non-existent fields (email, birth_date) from Leads/Patients forms |
 | | | - Verified strict type safety across admin module |
+| | | - **Dynamic AI Context**: Refactored System Prompt and Tools (`ai/brain.ts`, `ai/tools.ts`) to inject Organization Name, Address, and Business Hours dynamically from database. |
 | 2025-12-14 | AI Agent | **Phase 7 Complete**: Critical Blocker Resolution |
 | | | - ✅ Implemented WhatsApp message sending in all cron jobs |
 | | | - ✅ Created full authentication flow (login, register, forgot/reset password) |

@@ -598,3 +598,26 @@
 **Notes**:
 - The calendar system now relies heavily on the `BusinessHoursConfig` propagated from the database. Ensure any future changes to `organizations.settings` maintain the `business_hours` structure.
 ---
+
+## Session: 2025-12-14 18:00
+**Phase**: AI Refinement (Dynamic Context)
+
+**Completed**:
+- **Dynamic System Prompt**:
+  - Implemented `getClinicConfig` in `ai-brain.ts` to fetch Organization Name, Phone, Address, and Business Hours.
+  - Refactored `brain.ts` to inject these dynamic values into the System Prompt instead of hardcoded defaults.
+- **Dynamic Tools**:
+  - Refactored `tools.ts` to accept `clinicConfig` in context.
+  - `get_available_slots` now respects the Organization's specific database business hours (including closed days).
+  - `book_appointment` now validates against specific business hours.
+
+**Verification**:
+- ✅ `npm run lint`: Clean (0 errors).
+- ✅ Checked for hardcoded "08:00" and "Luxury Dental" strings in `src/lib/ai` - removed/replaced with dynamic config (except for necessary type defaults).
+
+**Next Up**:
+- Production Deployment.
+
+**Notes**:
+- The AI is now fully multi-tenant aware and ready to represent the specific clinic correctly.
+---

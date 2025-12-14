@@ -297,18 +297,67 @@ export async function getServices(organizationId: string): Promise<ServiceInfo[]
     }))
 }
 
+// ... imports
+import { DEFAULT_CLINIC_CONFIG, type ClinicConfig, type BusinessHours } from "../ai/types"
+
+// ... existing code ...
+
+/**
+ * Get clinic configuration
+ */
+export async function getClinicConfig(organizationId: string): Promise<ClinicConfig> {
+    const supabase = getAdminClient()
+
+    const { data: org } = await supabase
+        .from("organizations")
+        .select("name, settings")
+        .eq("id", organizationId)
+        .single()
+
+    if (!org) return DEFAULT_CLINIC_CONFIG
+
+    const settings = org.settings as Record<string, unknown> || {}
+    const hoursData = (settings.business_hours as Record<string, { open: string; close: string } | null>) || {}
+
+    // Map database hours to AI type BusinessHours
+    const businessHours: BusinessHours[] = []
+
+    // Days 0-6 (Sunday-Saturday)
+    for (let i = 0; i <= 6; i++) {
+        const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+        const dayKey = dayNames[i]
+        const h = hoursData[dayKey]
+
+        businessHours.push({
+            dayOfWeek: i,
+            isClosed: !h,
+            openTime: h?.open || "08:00",
+            closeTime: h?.close || "18:00"
+        })
+    }
+
+    return {
+        name: org.name,
+        address: (settings.address as string) || DEFAULT_CLINIC_CONFIG.address,
+        phone: (settings.phone as string) || DEFAULT_CLINIC_CONFIG.phone,
+        timezone: (settings.timezone as string) || DEFAULT_CLINIC_CONFIG.timezone,
+        businessHours
+    }
+}
+
 /**
  * Build full conversation context
  */
 export async function buildConversationContext(contact: Contact): Promise<ConversationContext> {
-    const [messages, appointments, services, lastCancellation] = await Promise.all([
+    const [messages, appointments, services, lastCancellation, clinicConfig] = await Promise.all([
         getMessageHistory(contact),
         getContactAppointments(contact),
         getServices(contact.organizationId),
         getLastCancellation(contact),
+        getClinicConfig(contact.organizationId)
     ])
 
-    return { contact, messages, appointments, services, lastCancellation }
+    return { contact, messages, appointments, services, lastCancellation, clinicConfig }
 }
 
 /**
