@@ -6,7 +6,7 @@ export default async function SettingsPage() {
     const [orgResult, hoursResult, servicesResult] = await Promise.all([
         getOrganization(),
         getBusinessHours(),
-        getServices()
+        getServices(true)
     ])
 
     const organization = orgResult.success ? orgResult.data : null
