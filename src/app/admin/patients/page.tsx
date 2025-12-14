@@ -1,5 +1,5 @@
 import { getPatients } from "@/lib/actions/patients"
-import { PatientsListClient } from "./patients-list-client"
+import { PatientsListClient } from "@/app/admin/patients/patients-list-client"
 
 export default async function PatientsPage({
     searchParams
