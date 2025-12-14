@@ -157,6 +157,8 @@ async function runTest() {
     }
 }
 
+import { DEFAULT_CLINIC_CONFIG } from "../src/lib/ai/types"
+
 function buildContext(contact: Contact): ConversationContext {
     return {
         contact,
@@ -164,6 +166,7 @@ function buildContext(contact: Contact): ConversationContext {
         appointments: mockAppointments,
         services: mockServices,
         lastCancellation: undefined,
+        clinicConfig: DEFAULT_CLINIC_CONFIG,
     }
 }
 

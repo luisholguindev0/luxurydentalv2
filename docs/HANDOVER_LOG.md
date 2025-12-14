@@ -621,3 +621,26 @@
 **Notes**:
 - The AI is now fully multi-tenant aware and ready to represent the specific clinic correctly.
 ---
+
+## Session: 2025-12-14 18:05
+**Phase**: Build & Bug Fixes
+
+**Completed**:
+- **Fixed Build Error**:
+  - Updated `scripts/ai-qa-test.ts` to include `clinicConfig` in the mock context, resolving the TypeScript error that blocked deployment.
+- **Fixed Settings Persistence**:
+  - Debugged `src/lib/actions/organization.ts`.
+  - Found and fixed a logic bug where checking explicit `null` values (Closed days) with `||` caused them to revert to default Open hours.
+  - Replaced checks with `??` (nullish coalescing) to correctly preserve "Closed" status in the database and UI.
+
+**Verification**:
+- ✅ `npm run build`: Passes successfully.
+- ✅ Logic check: Business hours configuration now correctly respects Organization settings (Closed days stay Closed).
+
+**Next Up**:
+- Deploy to Vercel.
+- Verify "Closed" days in the Calendar view.
+
+**Notes**:
+- The AI QA script is a local tool but shares types with the main app, so it must be kept in sync with type changes.
+---
