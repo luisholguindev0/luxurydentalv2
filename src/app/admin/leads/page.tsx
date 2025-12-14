@@ -1,5 +1,5 @@
 import { getLeads, getLeadStats } from "@/lib/actions/leads"
-import { LeadsListClient } from "./leads-list-client"
+import { LeadsListClient } from "@/app/admin/leads/leads-list-client"
 
 export default async function LeadsPage({
     searchParams

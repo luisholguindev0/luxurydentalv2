@@ -6,7 +6,7 @@ import { getTransactions, getFinancialSummary, getMonthlyBreakdown, getRevenueFo
 import { StatCard } from "@/components/features/financials/StatCard"
 import { RevenueChart } from "@/components/features/financials/RevenueChart"
 import { TransactionList } from "@/components/features/financials/TransactionList"
-import { FinancialsDashboardClient } from "./FinancialsDashboardClient"
+import { FinancialsDashboardClient } from "@/app/admin/financials/FinancialsDashboardClient"
 
 // Loading skeleton
 function StatCardSkeleton() {

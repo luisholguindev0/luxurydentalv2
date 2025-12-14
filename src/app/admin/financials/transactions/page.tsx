@@ -1,5 +1,5 @@
 import { getTransactions } from "@/lib/actions/transactions"
-import { TransactionsClient } from "./transactions-client"
+import { TransactionsClient } from "@/app/admin/financials/transactions/transactions-client"
 
 export default async function TransactionsPage({
     searchParams
