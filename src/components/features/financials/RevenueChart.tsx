@@ -65,6 +65,7 @@ export function RevenueChart({ data, title = "Ingresos vs Gastos" }: RevenueChar
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
+        // eslint-disable-next-line
         setMounted(true)
     }, [])
 
