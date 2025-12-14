@@ -631,10 +631,10 @@ WHERE id = 'your-org-id';
 **Status**: ✅ Complete (2025-12-14)
 All admin modules are fully implemented with UI, Actions, and Database integration.
 
-### Testing (MINIMAL)
+### Testing (PARTIAL)
 - [ ] Unit tests for server actions
 - [ ] Integration tests for AI
-- [ ] E2E tests for user flows
+- [/] E2E tests for user flows (Appointments COMPLETE)
 - [ ] RLS policy tests
 - [ ] Accessibility validation
 - [ ] Mobile device testing
@@ -681,6 +681,7 @@ The project includes comprehensive testing infrastructure for local development:
 | **All Cron Tests** | `npm run test:crons` | Comprehensive cron endpoint testing |
 | **Smart Monitor** | `npm run test:smart-monitor` | Test appointment reminders & auto-cancel |
 | **Marketing Cron** | `npm run test:marketing` | Test patient reactivation & NPS |
+| **E2E Integration** | `npm test` | Core business logic integration tests (Appointments) |
 | **Lint** | `npm run lint` | ESLint validation |
 | **Build** | `npm run build` | Production build test |
 

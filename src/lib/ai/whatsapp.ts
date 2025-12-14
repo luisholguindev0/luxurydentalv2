@@ -235,9 +235,9 @@ export function verifyWebhookPayload(
     // Compute expected signature using HMAC-SHA256
     // Using Web Crypto API for Edge compatibility
     try {
-        const encoder = new TextEncoder()
-        const keyData = encoder.encode(appSecret)
-        const messageData = encoder.encode(requestBody)
+        // const encoder = new TextEncoder()
+        // const keyData = encoder.encode(appSecret)
+        // const messageData = encoder.encode(requestBody)
 
         // For synchronous verification, we use a simplified approach
         // In Node.js environment, use crypto module

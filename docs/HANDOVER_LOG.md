@@ -1,5 +1,39 @@
 # Handover Log
 
+## Session: 2025-12-14 15:45
+**Phase**: Testing - Appointments E2E - COMPLETED
+
+**Completed**:
+- **E2E Testing Infrastructure**:
+  - Configured Jest with `ts-jest` for Next.js 16 integration.
+  - Setup integration tests folder `src/__tests__/integration`.
+  - Created test helpers (`helpers.ts`) for clean Org/User/Service creation per test run.
+- **Appointments Test Suite**:
+  - Implemented `appointments.test.ts` covering:
+    - Business Hours Validation (Sunday rejection).
+    - Appointment Creation (Success flow).
+    - Conflict Detection (Overlapping slots).
+    - Adjacent Slot Allowance (Booking back-to-back).
+    - Availability Calculation (Correct slot identification).
+  - All 5/5 tests PASSING.
+- **Refactoring for Testability**:
+  - Refactored `createAppointment` to `createAppointmentInternal` for dependency injection.
+  - Refactored `getAvailableSlots` to `getAvailableSlotsInternal` for dependency injection.
+  - Injected `revalidatePath` to prevent Next.js static generation errors in tests.
+- **Verification**:
+  - `npm test` passes.
+  - `npm run lint` passes (fixed explicit `any`).
+  - `grep -r "TODO" src/` is clean.
+
+**Next Up**: 
+- E2E Tests for Patients & Services (Optional but recommended).
+- Manual Verification of UI.
+
+**Notes**:
+- The tests run against the REAL Supabase instance (defined in `.env.local`), creating ephemeral Organizations for isolation. This provides high confidence in DB constraints and RLS policies.
+
+---
+
 ## Session: 2025-12-14 14:15
 **Phase**: Build & Type Stabilization (Post-Phase 7) - COMPLETE
 

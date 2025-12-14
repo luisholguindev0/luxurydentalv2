@@ -8,8 +8,7 @@ import {
     AlertTriangle,
     Trash2,
     Edit,
-    AlertCircle,
-    Check
+    AlertCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +24,8 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog"
 import { inventoryItemCreateSchema } from "@/lib/validations/schemas"
-import { z } from "zod"
 
 type InventoryItem = Tables<"inventory_items">
 

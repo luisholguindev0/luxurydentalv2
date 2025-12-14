@@ -29,7 +29,7 @@ const BUSINESS_HOURS = {
 /**
  * Validate that appointment time is within business hours
  */
-function validateBusinessHours(startTime: Date, endTime: Date): { valid: boolean; error?: string } {
+export function validateBusinessHours(startTime: Date, endTime: Date): { valid: boolean; error?: string } {
     const dayOfWeek = startTime.getDay() as keyof typeof BUSINESS_HOURS
     const hours = BUSINESS_HOURS[dayOfWeek]
 
@@ -54,7 +54,10 @@ function validateBusinessHours(startTime: Date, endTime: Date): { valid: boolean
 /**
  * Check for conflicting appointments
  */
-async function checkConflict(
+/**
+ * Check for conflicting appointments
+ */
+export async function checkConflict(
     supabase: Awaited<ReturnType<typeof createClient>>,
     orgId: string,
     startTime: string,
@@ -158,6 +161,66 @@ export async function getAppointmentById(id: string): Promise<ActionResult<Appoi
 /**
  * Create a new appointment
  */
+/**
+ * Internal implementation of createAppointment for testing
+ */
+export async function createAppointmentInternal(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    orgId: string,
+    input: unknown,
+    revalidateFn: (path: string) => void = revalidatePath
+): Promise<ActionResult<Appointment>> {
+    const parsed = appointmentCreateSchema.safeParse(input)
+    if (!parsed.success) {
+        return { success: false, error: parsed.error.issues[0].message }
+    }
+
+    const { patient_id, service_id, start_time, end_time, notes } = parsed.data
+
+    // Validate business hours
+    const startDate = new Date(start_time)
+    const endDate = new Date(end_time)
+
+    const hoursValidation = validateBusinessHours(startDate, endDate)
+    if (!hoursValidation.valid) {
+        return { success: false, error: hoursValidation.error! }
+    }
+
+    // Check for conflicts
+    const conflictCheck = await checkConflict(supabase, orgId, start_time, end_time)
+    if (conflictCheck.hasConflict) {
+        return { success: false, error: conflictCheck.error! }
+    }
+
+    // Create appointment
+    const { data, error } = await supabase
+        .from("appointments")
+        .insert({
+            organization_id: orgId,
+            patient_id,
+            service_id: service_id || null,
+            start_time,
+            end_time,
+            notes: notes || null,
+            status: "scheduled"
+        })
+        .select()
+        .single()
+
+    if (error) throw error
+
+    // Call injected revalidation function
+    try {
+        revalidateFn("/admin/appointments")
+    } catch {
+        // Ignore revalidation errors in tests if they slip through
+    }
+    return { success: true, data }
+}
+
+/**
+ * Create a new appointment
+ */
 export async function createAppointment(
     input: unknown
 ): Promise<ActionResult<Appointment>> {
@@ -167,50 +230,8 @@ export async function createAppointment(
             return { success: false, error: "No autorizado" }
         }
 
-        // Validate input
-        const parsed = appointmentCreateSchema.safeParse(input)
-        if (!parsed.success) {
-            return { success: false, error: parsed.error.issues[0].message }
-        }
-
-        const { patient_id, service_id, start_time, end_time, notes } = parsed.data
-
-        // Validate business hours
-        const startDate = new Date(start_time)
-        const endDate = new Date(end_time)
-
-        const hoursValidation = validateBusinessHours(startDate, endDate)
-        if (!hoursValidation.valid) {
-            return { success: false, error: hoursValidation.error! }
-        }
-
         const supabase = await createClient()
-
-        // Check for conflicts
-        const conflictCheck = await checkConflict(supabase, orgId, start_time, end_time)
-        if (conflictCheck.hasConflict) {
-            return { success: false, error: conflictCheck.error! }
-        }
-
-        // Create appointment
-        const { data, error } = await supabase
-            .from("appointments")
-            .insert({
-                organization_id: orgId,
-                patient_id,
-                service_id: service_id || null,
-                start_time,
-                end_time,
-                notes: notes || null,
-                status: "scheduled"
-            })
-            .select()
-            .single()
-
-        if (error) throw error
-
-        revalidatePath("/admin/appointments")
-        return { success: true, data }
+        return createAppointmentInternal(supabase, orgId, input)
     } catch (error) {
         return handleActionError(error)
     }
@@ -353,6 +374,68 @@ export async function updateAppointmentStatus(
 /**
  * Get available time slots for a specific date
  */
+/**
+ * Internal implementation of getAvailableSlots for testing
+ */
+export async function getAvailableSlotsInternal(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    orgId: string,
+    date: string,
+    durationMinutes: number = 30
+): Promise<ActionResult<{ time: string; available: boolean }[]>> {
+    const targetDate = new Date(date)
+    const dayOfWeek = targetDate.getDay() as keyof typeof BUSINESS_HOURS
+    const hours = BUSINESS_HOURS[dayOfWeek]
+
+    if (!hours) {
+        return { success: true, data: [] } // Closed day
+    }
+
+    // Get existing appointments for the day
+    const dayStart = new Date(targetDate)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(targetDate)
+    dayEnd.setHours(23, 59, 59, 999)
+
+    const { data: existingAppointments, error } = await supabase
+        .from("appointments")
+        .select("start_time, end_time")
+        .eq("organization_id", orgId)
+        .neq("status", "cancelled")
+        .gte("start_time", dayStart.toISOString())
+        .lte("start_time", dayEnd.toISOString())
+
+    if (error) throw error
+
+    // Generate all possible slots
+    const slots: { time: string; available: boolean }[] = []
+    const slotTime = new Date(targetDate)
+    slotTime.setHours(hours.open, 0, 0, 0)
+
+    while (slotTime.getHours() + slotTime.getMinutes() / 60 + durationMinutes / 60 <= hours.close) {
+        const slotEnd = new Date(slotTime.getTime() + durationMinutes * 60000)
+
+        // Check if slot conflicts with any existing appointment
+        const isAvailable = !existingAppointments?.some(apt => {
+            const aptStart = new Date(apt.start_time)
+            const aptEnd = new Date(apt.end_time)
+            return slotTime < aptEnd && slotEnd > aptStart
+        })
+
+        slots.push({
+            time: slotTime.toISOString(),
+            available: isAvailable
+        })
+
+        slotTime.setMinutes(slotTime.getMinutes() + 30)
+    }
+
+    return { success: true, data: slots }
+}
+
+/**
+ * Get available time slots for a specific date
+ */
 export async function getAvailableSlots(
     date: string,
     durationMinutes: number = 30
@@ -363,56 +446,8 @@ export async function getAvailableSlots(
             return { success: false, error: "No autorizado" }
         }
 
-        const targetDate = new Date(date)
-        const dayOfWeek = targetDate.getDay() as keyof typeof BUSINESS_HOURS
-        const hours = BUSINESS_HOURS[dayOfWeek]
-
-        if (!hours) {
-            return { success: true, data: [] } // Closed day
-        }
-
         const supabase = await createClient()
-
-        // Get existing appointments for the day
-        const dayStart = new Date(targetDate)
-        dayStart.setHours(0, 0, 0, 0)
-        const dayEnd = new Date(targetDate)
-        dayEnd.setHours(23, 59, 59, 999)
-
-        const { data: existingAppointments, error } = await supabase
-            .from("appointments")
-            .select("start_time, end_time")
-            .eq("organization_id", orgId)
-            .neq("status", "cancelled")
-            .gte("start_time", dayStart.toISOString())
-            .lte("start_time", dayEnd.toISOString())
-
-        if (error) throw error
-
-        // Generate all possible slots
-        const slots: { time: string; available: boolean }[] = []
-        const slotTime = new Date(targetDate)
-        slotTime.setHours(hours.open, 0, 0, 0)
-
-        while (slotTime.getHours() + slotTime.getMinutes() / 60 + durationMinutes / 60 <= hours.close) {
-            const slotEnd = new Date(slotTime.getTime() + durationMinutes * 60000)
-
-            // Check if slot conflicts with any existing appointment
-            const isAvailable = !existingAppointments?.some(apt => {
-                const aptStart = new Date(apt.start_time)
-                const aptEnd = new Date(apt.end_time)
-                return slotTime < aptEnd && slotEnd > aptStart
-            })
-
-            slots.push({
-                time: slotTime.toISOString(),
-                available: isAvailable
-            })
-
-            slotTime.setMinutes(slotTime.getMinutes() + 30)
-        }
-
-        return { success: true, data: slots }
+        return getAvailableSlotsInternal(supabase, orgId, date, durationMinutes)
     } catch (error) {
         return handleActionError(error)
     }
