@@ -10,8 +10,8 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import type { WhatsAppWebhookPayload, WhatsAppWebhookMessage } from "@/lib/ai/whatsapp"
-import { sendWhatsAppMessage, markMessageAsRead, downloadWhatsAppMedia } from "@/lib/ai/whatsapp"
-import { handleIncomingMessage } from "@/lib/actions/ai-brain"
+import { sendWhatsAppMessage, markMessageAsRead, downloadWhatsAppMedia, verifyWebhookPayloadAsync } from "@/lib/ai/whatsapp"
+import { handleIncomingMessage, resolveOrganization } from "@/lib/actions/ai-brain"
 import { enforceRateLimit, RateLimits } from "@/lib/utils/rate-limit"
 
 /**
@@ -48,6 +48,15 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.text()
+
+        // Verify webhook signature (security)
+        const signature = request.headers.get("x-hub-signature-256")
+        const isValid = await verifyWebhookPayloadAsync(body, signature)
+        if (!isValid) {
+            console.error("[WhatsApp Webhook] Invalid signature - rejecting")
+            return new NextResponse("Unauthorized", { status: 401 })
+        }
+
         const payload: WhatsAppWebhookPayload = JSON.parse(body)
 
         // Log for debugging (remove in production)
@@ -60,10 +69,17 @@ export async function POST(request: NextRequest) {
 
                 const value = change.value
 
+                // Extract the phone number ID (used for org resolution)
+                const phoneNumberId = value.metadata?.phone_number_id
+
                 // Handle incoming messages
                 if (value.messages?.length) {
                     for (const message of value.messages) {
-                        await processIncomingMessage(message, value.contacts?.[0])
+                        await processIncomingMessage(
+                            message,
+                            value.contacts?.[0],
+                            phoneNumberId
+                        )
                     }
                 }
 
@@ -90,12 +106,24 @@ export async function POST(request: NextRequest) {
  */
 async function processIncomingMessage(
     message: WhatsAppWebhookMessage,
-    contact?: { profile: { name: string }; wa_id: string }
+    contact?: { profile: { name: string }; wa_id: string },
+    phoneNumberId?: string
 ) {
     const phone = message.from
     const profileName = contact?.profile?.name
 
     console.log(`[WhatsApp] Message from ${phone} (${profileName || "unknown"}): ${message.type}`)
+
+    // Resolve organization from WhatsApp Phone Number ID
+    const organizationId = await resolveOrganization(phoneNumberId)
+    if (!organizationId) {
+        console.error("[WhatsApp] Could not resolve organization for phone number ID:", phoneNumberId)
+        await sendWhatsAppMessage(
+            phone,
+            "Disculpa, estamos experimentando dificultades técnicas. Por favor intenta más tarde. 🙏"
+        )
+        return
+    }
 
     // Mark message as read immediately
     await markMessageAsRead(message.id)
@@ -148,10 +176,11 @@ async function processIncomingMessage(
     }
 
     try {
-        // Process message through AI Brain
+        // Process message through AI Brain with resolved organization
         const responseText = await handleIncomingMessage(
             phone,
             messageContent,
+            organizationId,
             profileName
         )
 

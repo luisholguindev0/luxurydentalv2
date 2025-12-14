@@ -1,8 +1,8 @@
 # LuxuryDental v2.0 — PRD + Roadmap (Source of Truth)
 
 > **Last Updated**: 2025-12-14  
-> **Status**: Development - Phase 6 Complete, ~65% Overall Completion  
-> **Production Ready**: ❌ NO - See docs/TODO.md for blockers  
+> **Status**: Development - Phase 7 Complete, ~85% Overall Completion  
+> **Production Ready**: ⚠️ NEAR - Core blockers resolved, admin pages pending  
 > **Maintainer**: [Luis]
 
 ---
@@ -551,37 +551,56 @@ Sunday:    CLOSED
 
 ---
 
-## 🔴 CRITICAL BLOCKERS (Must Fix Before Production)
+## ✅ CRITICAL BLOCKERS (ALL RESOLVED)
 
-### 1. WhatsApp Message Sending NOT IMPLEMENTED
-**Status**: ❌ Code has TODO comments only  
+### 1. WhatsApp Message Sending ✅ FIXED
+**Status**: ✅ Implemented (2025-12-14)  
 **Files**: 
-- `src/app/api/cron/smart-monitor/route.ts:220, 263`
-- `src/app/api/cron/marketing/route.ts:198, 233, 337`
+- `src/app/api/cron/smart-monitor/route.ts` - 24h and 1h reminders now send via `sendWhatsAppMessage()`
+- `src/app/api/cron/marketing/route.ts` - Reactivation, NPS, and lead follow-up all send messages
 
-**Required**: Replace TODO comments with actual `sendWhatsAppMessage()` calls
+**Implementation**: All cron jobs now use `sendWhatsAppMessage()` from the WhatsApp client. Campaign sends are tracked with sent/failed status.
 
-### 2. Authentication Flow INCOMPLETE
-**Status**: ❌ No login/logout UI  
-**Missing**:
-- Login page
-- Registration page  
-- Password reset
-- Logout handler (`src/app/admin/layout.tsx:111` has TODO)
+### 2. Authentication Flow ✅ FIXED
+**Status**: ✅ Complete (2025-12-14)  
+**Files Created**:
+- `src/middleware.ts` - Auth protection for `/admin/*` routes
+- `src/lib/actions/auth.ts` - Server actions with Zod validation
+- `src/app/login/page.tsx` - Premium login page
+- `src/app/register/page.tsx` - Registration with email confirmation
+- `src/app/forgot-password/page.tsx` - Password reset request
+- `src/app/reset-password/page.tsx` - New password entry
 
-### 3. Multi-Org Routing HARDCODED
-**Status**: ⚠️ Single organization only  
-**File**: `src/lib/actions/ai-brain.ts:26`  
-**Issue**: `DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"` hardcoded
+**Implementation**: Full Supabase Auth flow with middleware protection. Logout implemented in admin layout with loading state.
 
-**Required**: Implement phone number → organization mapping
+### 3. Multi-Org Routing ✅ FIXED
+**Status**: ✅ Dynamic resolution (2025-12-14)  
+**File**: `src/lib/actions/ai-brain.ts`  
 
-### 4. WhatsApp Webhook Security WEAK
-**Status**: ⚠️ No signature verification  
-**File**: `src/lib/ai/whatsapp.ts:215`  
-**Issue**: TODO comment, HMAC verification not implemented
+**Implementation**: 
+- Created `resolveOrganization(whatsappPhoneNumberId)` function
+- Looks up organization by `settings->whatsapp_phone_number_id` JSONB field
+- Fallback to first organization for single-tenant deployments
+- Results cached for 5 minutes
 
-**Required**: Implement Meta's X-Hub-Signature-256 verification
+**Configuration**: 
+```sql
+UPDATE organizations 
+SET settings = jsonb_set(settings, '{whatsapp_phone_number_id}', '"YOUR_PHONE_ID"')
+WHERE id = 'your-org-id';
+```
+
+### 4. WhatsApp Webhook Security ✅ FIXED
+**Status**: ✅ HMAC verification implemented (2025-12-14)  
+**File**: `src/lib/ai/whatsapp.ts`  
+
+**Implementation**: 
+- `verifyWebhookPayloadAsync()` - Full HMAC-SHA256 verification using Web Crypto API
+- `verifyWebhookPayload()` - Sync version with Node.js crypto fallback
+- Timing-safe comparison to prevent timing attacks
+- Graceful degradation if `WHATSAPP_APP_SECRET` not set (dev mode)
+
+**Required Env**: `WHATSAPP_APP_SECRET` - Your Meta App Secret for signature verification
 
 ---
 
@@ -767,7 +786,21 @@ Before considering a feature complete:
 ## 8. Changelog
 
 | Date | Author | Change |
-|------|--------|--------|
+|------|--------|---------|
+| 2025-12-14 | AI Agent | **Build & Type Stabilization** |
+| | | - Fixed Zod schema for organization settings (resolved build error) |
+| | | - Fixed Supabase join type inference in messages system |
+| | | - Removed non-existent fields (email, birth_date) from Leads/Patients forms |
+| | | - Verified strict type safety across admin module |
+| 2025-12-14 | AI Agent | **Phase 7 Complete**: Critical Blocker Resolution |
+| | | - ✅ Implemented WhatsApp message sending in all cron jobs |
+| | | - ✅ Created full authentication flow (login, register, forgot/reset password) |
+| | | - ✅ Built middleware for `/admin/*` route protection |
+| | | - ✅ Implemented dynamic multi-org routing with `resolveOrganization()` |
+| | | - ✅ Added HMAC-SHA256 webhook signature verification |
+| | | - ✅ Logout functionality in admin layout |
+| | | - ✅ All TODOs eliminated (0 remaining) |
+| | | - ✅ Build passes, lint clean |
 | 2025-12-14 | AI Agent | **Phase 6 Complete**: Polish & Hardening |
 | | | - Created Error Boundaries for all routes (root, admin, appointments, financials) |
 | | | - Built Empty State component with luxury styling |
@@ -832,6 +865,7 @@ Before considering a feature complete:
 1. **Empty states matter**: Users get confused by blank pages
 2. **Skeletons > spinners**: Feels faster
 3. **Error boundaries catch failures**: No white screens
+4. **Verify Schema Field-level**: Always check `types/database.ts` before assuming columns exist (avoided 'email' on leads bug)
 
 ---
 

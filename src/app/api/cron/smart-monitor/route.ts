@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
+import { sendWhatsAppMessage } from "@/lib/ai/whatsapp"
+import { format } from "date-fns"
+import { toZonedTime } from "date-fns-tz"
+
+const TIMEZONE = "America/Bogota"
 
 // Service role client for cron jobs (bypasses RLS)
 const getServiceClient = () => {
@@ -47,6 +52,8 @@ export async function POST(request: Request) {
             auto_cancelled: 0,
             reminders_24h: 0,
             reminders_1h: 0,
+            messages_sent: 0,
+            message_errors: 0,
             errors: [] as string[],
         }
 
@@ -58,11 +65,15 @@ export async function POST(request: Request) {
 
                 // 2. SEND 24H REMINDERS
                 const reminder24hResult = await send24hReminders(supabase, org.id)
-                results.reminders_24h += reminder24hResult
+                results.reminders_24h += reminder24hResult.sent
+                results.messages_sent += reminder24hResult.messagesSent
+                results.message_errors += reminder24hResult.messageErrors
 
                 // 3. SEND 1H REMINDERS
                 const reminder1hResult = await send1hReminders(supabase, org.id)
-                results.reminders_1h += reminder1hResult
+                results.reminders_1h += reminder1hResult.sent
+                results.messages_sent += reminder1hResult.messagesSent
+                results.message_errors += reminder1hResult.messageErrors
 
                 results.processed_orgs++
             } catch (err) {
@@ -135,7 +146,7 @@ async function autoCancelNoShows(
 async function send24hReminders(
     supabase: ReturnType<typeof getServiceClient>,
     orgId: string
-): Promise<number> {
+): Promise<{ sent: number; messagesSent: number; messageErrors: number }> {
     const now = new Date()
     const windowStart = new Date(now.getTime() + 23.5 * 60 * 60 * 1000).toISOString()
     const windowEnd = new Date(now.getTime() + 24.5 * 60 * 60 * 1000).toISOString()
@@ -156,15 +167,17 @@ async function send24hReminders(
 
     if (error) {
         console.error("[smart-monitor] Error fetching 24h reminders:", error)
-        return 0
+        return { sent: 0, messagesSent: 0, messageErrors: 0 }
     }
 
-    if (!appointments?.length) return 0
+    if (!appointments?.length) return { sent: 0, messagesSent: 0, messageErrors: 0 }
 
-    // Check which haven't received a 24h reminder already
+    let messagesSent = 0
+    let messageErrors = 0
+
     for (const apt of appointments) {
         const patient = apt.patient as { id: string; full_name: string; whatsapp_number: string } | null
-        if (!patient) continue
+        if (!patient || !patient.whatsapp_number) continue
 
         // Check if reminder campaign send already exists
         const { data: existingSend } = await supabase
@@ -181,7 +194,7 @@ async function send24hReminders(
         // Get or create reminder campaign
         let { data: campaign } = await supabase
             .from("drip_campaigns")
-            .select("id")
+            .select("id, message_template")
             .eq("organization_id", orgId)
             .eq("type", "reminder")
             .eq("is_active", true)
@@ -189,7 +202,6 @@ async function send24hReminders(
             .single()
 
         if (!campaign) {
-            // Create default reminder campaign
             const { data: newCampaign } = await supabase
                 .from("drip_campaigns")
                 .insert({
@@ -198,10 +210,10 @@ async function send24hReminders(
                     type: "reminder",
                     trigger_condition: { hours_before: 24 },
                     message_template:
-                        "Hola {{name}}, te recordamos que tienes cita mañana a las {{time}}. ¡Te esperamos!",
+                        "Hola {{name}}, te recordamos que tienes cita mañana a las {{time}}. ¡Te esperamos! 🦷",
                     is_active: true,
                 })
-                .select("id")
+                .select("id, message_template")
                 .single()
 
             campaign = newCampaign
@@ -209,28 +221,49 @@ async function send24hReminders(
 
         if (!campaign) continue
 
+        // Format the appointment time
+        const appointmentTime = toZonedTime(new Date(apt.start_time), TIMEZONE)
+        const timeStr = format(appointmentTime, "h:mm a")
+
+        // Build the message from template
+        const message = (campaign.message_template || "Hola {{name}}, te recordamos tu cita mañana a las {{time}}. ¡Te esperamos!")
+            .replace(/\{\{name\}\}/g, patient.full_name.split(" ")[0])
+            .replace(/\{\{time\}\}/g, timeStr)
+
+        // Send WhatsApp message
+        const result = await sendWhatsAppMessage(patient.whatsapp_number, message)
+
         // Create campaign send record
-        await supabase.from("campaign_sends").insert({
+        const sendRecord = await supabase.from("campaign_sends").insert({
             organization_id: orgId,
             campaign_id: campaign.id,
             patient_id: patient.id,
-            status: "pending",
+            status: result.success ? "sent" : "failed",
+            sent_at: result.success ? new Date().toISOString() : null,
+            error_message: result.error || null,
         })
 
-        // TODO: Actually send WhatsApp message here
-        // For now just log it
-        console.log(
-            `[smart-monitor] 24h reminder for ${patient.full_name} at ${patient.whatsapp_number}`
-        )
+        if (result.success) {
+            messagesSent++
+            console.log(`[smart-monitor] 24h reminder sent to ${patient.full_name} at ${patient.whatsapp_number}`)
+        } else {
+            messageErrors++
+            console.error(`[smart-monitor] Failed to send 24h reminder to ${patient.full_name}: ${result.error}`)
+        }
+
+        // Avoid insert error logging noise
+        if (sendRecord.error) {
+            console.error("[smart-monitor] Failed to record campaign send:", sendRecord.error)
+        }
     }
 
-    return appointments.length
+    return { sent: appointments.length, messagesSent, messageErrors }
 }
 
 async function send1hReminders(
     supabase: ReturnType<typeof getServiceClient>,
     orgId: string
-): Promise<number> {
+): Promise<{ sent: number; messagesSent: number; messageErrors: number }> {
     const now = new Date()
     const windowStart = new Date(now.getTime() + 0.5 * 60 * 60 * 1000).toISOString()
     const windowEnd = new Date(now.getTime() + 1.5 * 60 * 60 * 1000).toISOString()
@@ -251,22 +284,50 @@ async function send1hReminders(
 
     if (error) {
         console.error("[smart-monitor] Error fetching 1h reminders:", error)
-        return 0
+        return { sent: 0, messagesSent: 0, messageErrors: 0 }
     }
 
-    if (!appointments?.length) return 0
+    if (!appointments?.length) return { sent: 0, messagesSent: 0, messageErrors: 0 }
+
+    let messagesSent = 0
+    let messageErrors = 0
 
     for (const apt of appointments) {
         const patient = apt.patient as { id: string; full_name: string; whatsapp_number: string } | null
-        if (!patient) continue
+        if (!patient || !patient.whatsapp_number) continue
 
-        // TODO: Actually send WhatsApp message here
-        console.log(
-            `[smart-monitor] 1h reminder for ${patient.full_name} at ${patient.whatsapp_number}`
-        )
+        // Check if we already sent a 1h reminder for this specific appointment
+        const { data: existingSend } = await supabase
+            .from("campaign_sends")
+            .select("id")
+            .eq("organization_id", orgId)
+            .eq("patient_id", patient.id)
+            .gte("created_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString())
+            .limit(1)
+
+        // Skip if we sent any reminder in last 2 hours (24h reminder would have been sent)
+        // This prevents duplicate reminders
+        if (existingSend?.length) continue
+
+        // Format the appointment time
+        const appointmentTime = toZonedTime(new Date(apt.start_time), TIMEZONE)
+        const timeStr = format(appointmentTime, "h:mm a")
+
+        const message = `¡Hola ${patient.full_name.split(" ")[0]}! Tu cita es en 1 hora (${timeStr}). ¡Te esperamos! 🦷`
+
+        // Send WhatsApp message
+        const result = await sendWhatsAppMessage(patient.whatsapp_number, message)
+
+        if (result.success) {
+            messagesSent++
+            console.log(`[smart-monitor] 1h reminder sent to ${patient.full_name} at ${patient.whatsapp_number}`)
+        } else {
+            messageErrors++
+            console.error(`[smart-monitor] Failed to send 1h reminder to ${patient.full_name}: ${result.error}`)
+        }
     }
 
-    return appointments.length
+    return { sent: appointments.length, messagesSent, messageErrors }
 }
 
 // For Vercel Cron

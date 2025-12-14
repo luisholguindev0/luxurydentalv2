@@ -17,6 +17,7 @@ import {
     X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { signOut } from "@/lib/actions/auth"
 
 const NAVIGATION = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -36,12 +37,23 @@ export default function AdminLayout({
 }) {
     const pathname = usePathname()
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [isLoggingOut, setIsLoggingOut] = useState(false)
 
     const isActive = (href: string) => {
         if (href === "/admin") {
             return pathname === "/admin"
         }
         return pathname.startsWith(href)
+    }
+
+    const handleLogout = async () => {
+        setIsLoggingOut(true)
+        try {
+            await signOut()
+        } catch (error) {
+            console.error("Logout error:", error)
+            setIsLoggingOut(false)
+        }
     }
 
     return (
@@ -106,13 +118,21 @@ export default function AdminLayout({
                 {/* Footer */}
                 <div className="p-4 border-t border-white/10">
                     <button
-                        className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:bg-white/5 hover:text-luxury-danger transition-colors"
-                        onClick={() => {
-                            // TODO: Implement logout
-                        }}
+                        className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-text-muted hover:bg-white/5 hover:text-luxury-danger transition-colors disabled:opacity-50"
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
                     >
-                        <LogOut className="h-5 w-5" />
-                        Cerrar Sesión
+                        {isLoggingOut ? (
+                            <>
+                                <div className="h-5 w-5 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin" />
+                                Cerrando...
+                            </>
+                        ) : (
+                            <>
+                                <LogOut className="h-5 w-5" />
+                                Cerrar Sesión
+                            </>
+                        )}
                     </button>
                 </div>
             </aside>

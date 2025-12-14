@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
+import { sendWhatsAppMessage } from "@/lib/ai/whatsapp"
 
 // Service role client for cron jobs (bypasses RLS)
 const getServiceClient = () => {
@@ -47,25 +48,30 @@ export async function POST(request: Request) {
             reactivation_sent: 0,
             lead_followup_sent: 0,
             nps_requests_sent: 0,
+            messages_sent: 0,
+            message_errors: 0,
             errors: [] as string[],
         }
 
         for (const org of orgs ?? []) {
             try {
                 // 1. DORMANT PATIENT REACTIVATION
-                const reactivationResult = await sendReactivationCampaign(
-                    supabase,
-                    org.id
-                )
-                results.reactivation_sent += reactivationResult
+                const reactivationResult = await sendReactivationCampaign(supabase, org.id)
+                results.reactivation_sent += reactivationResult.processed
+                results.messages_sent += reactivationResult.messagesSent
+                results.message_errors += reactivationResult.messageErrors
 
                 // 2. LOST LEAD FOLLOW-UP
                 const leadFollowupResult = await sendLeadFollowup(supabase, org.id)
-                results.lead_followup_sent += leadFollowupResult
+                results.lead_followup_sent += leadFollowupResult.processed
+                results.messages_sent += leadFollowupResult.messagesSent
+                results.message_errors += leadFollowupResult.messageErrors
 
                 // 3. NPS REQUESTS
                 const npsResult = await sendNpsRequests(supabase, org.id)
-                results.nps_requests_sent += npsResult
+                results.nps_requests_sent += npsResult.processed
+                results.messages_sent += npsResult.messagesSent
+                results.message_errors += npsResult.messageErrors
 
                 results.processed_orgs++
             } catch (err) {
@@ -93,15 +99,20 @@ export async function POST(request: Request) {
 // HELPER FUNCTIONS
 // ============================================
 
+interface CampaignResult {
+    processed: number
+    messagesSent: number
+    messageErrors: number
+}
+
 async function sendReactivationCampaign(
     supabase: ReturnType<typeof getServiceClient>,
     orgId: string
-): Promise<number> {
+): Promise<CampaignResult> {
     // Get patients with no appointment in last 6 months
     const sixMonthsAgo = new Date()
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
-    // Get all patients
     const { data: patients, error: patientError } = await supabase
         .from("patients")
         .select(
@@ -116,7 +127,7 @@ async function sendReactivationCampaign(
 
     if (patientError) {
         console.error("[marketing] Error fetching patients:", patientError)
-        return 0
+        return { processed: 0, messagesSent: 0, messageErrors: 0 }
     }
 
     // Filter to dormant patients
@@ -137,7 +148,7 @@ async function sendReactivationCampaign(
         return new Date(lastAppointment.start_time) < sixMonthsAgo
     })
 
-    if (!dormantPatients.length) return 0
+    if (!dormantPatients.length) return { processed: 0, messagesSent: 0, messageErrors: 0 }
 
     // Get or create reactivation campaign
     let { data: campaign } = await supabase
@@ -167,15 +178,17 @@ async function sendReactivationCampaign(
         campaign = newCampaign
     }
 
-    if (!campaign) return 0
+    if (!campaign) return { processed: 0, messagesSent: 0, messageErrors: 0 }
 
-    let sentCount = 0
+    let processed = 0
+    let messagesSent = 0
+    let messageErrors = 0
 
     for (const patient of dormantPatients) {
+        if (!patient.whatsapp_number) continue
+
         // Check if already sent in last 30 days
-        const thirtyDaysAgo = new Date(
-            Date.now() - 30 * 24 * 60 * 60 * 1000
-        ).toISOString()
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
         const { data: existingSend } = await supabase
             .from("campaign_sends")
@@ -187,31 +200,41 @@ async function sendReactivationCampaign(
 
         if (existingSend?.length) continue // Already sent recently
 
-        // Create campaign send
+        // Build message from template
+        const message = (campaign.message_template || "Hola {{name}}, ¿te gustaría agendar una cita? 🦷")
+            .replace(/\{\{name\}\}/g, patient.full_name.split(" ")[0])
+
+        // Send WhatsApp message
+        const result = await sendWhatsAppMessage(patient.whatsapp_number, message)
+
+        // Create campaign send record
         await supabase.from("campaign_sends").insert({
             organization_id: orgId,
             campaign_id: campaign.id,
             patient_id: patient.id,
-            status: "pending",
+            status: result.success ? "sent" : "failed",
+            sent_at: result.success ? new Date().toISOString() : null,
+            error_message: result.error || null,
         })
 
-        // TODO: Actually send WhatsApp message
-        console.log(
-            `[marketing] Reactivation for ${patient.full_name} at ${patient.whatsapp_number}`
-        )
-        sentCount++
+        if (result.success) {
+            messagesSent++
+            console.log(`[marketing] Reactivation sent to ${patient.full_name} at ${patient.whatsapp_number}`)
+        } else {
+            messageErrors++
+            console.error(`[marketing] Failed reactivation for ${patient.full_name}: ${result.error}`)
+        }
+
+        processed++
     }
 
-    // Note: send_count should use SQL increment but for simplicity we skip it here
-    // The campaign_sends table already tracks individual sends
-
-    return sentCount
+    return { processed, messagesSent, messageErrors }
 }
 
 async function sendLeadFollowup(
     supabase: ReturnType<typeof getServiceClient>,
     orgId: string
-): Promise<number> {
+): Promise<CampaignResult> {
     // Get leads with no contact in last 7 days that are still "new" or "contacted"
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -224,29 +247,94 @@ async function sendLeadFollowup(
 
     if (error) {
         console.error("[marketing] Error fetching leads:", error)
-        return 0
+        return { processed: 0, messagesSent: 0, messageErrors: 0 }
     }
 
-    if (!leads?.length) return 0
+    if (!leads?.length) return { processed: 0, messagesSent: 0, messageErrors: 0 }
+
+    // Get or create lead follow-up campaign
+    let { data: campaign } = await supabase
+        .from("drip_campaigns")
+        .select("id, message_template")
+        .eq("organization_id", orgId)
+        .eq("type", "promotion")
+        .eq("is_active", true)
+        .limit(1)
+        .single()
+
+    if (!campaign) {
+        const { data: newCampaign } = await supabase
+            .from("drip_campaigns")
+            .insert({
+                organization_id: orgId,
+                name: "Seguimiento de Leads",
+                type: "promotion",
+                trigger_condition: { days_inactive: 7 },
+                message_template:
+                    "Hola{{#name}} {{name}}{{/name}}, ¿sigues interesado en agendar una cita? Estamos aquí para ayudarte. 🦷",
+                is_active: true,
+            })
+            .select("id, message_template")
+            .single()
+
+        campaign = newCampaign
+    }
+
+    let processed = 0
+    let messagesSent = 0
+    let messageErrors = 0
 
     for (const lead of leads) {
-        // TODO: Actually send WhatsApp message
-        console.log(
-            `[marketing] Lead follow-up for ${lead.name ?? "Unknown"} at ${lead.phone}`
-        )
+        if (!lead.phone) continue
+
+        // Build message
+        const greeting = lead.name ? `Hola ${lead.name.split(" ")[0]}` : "Hola"
+        const message = `${greeting}, ¿sigues interesado en agendar una cita? Estamos aquí para ayudarte 🦷`
+
+        // Send WhatsApp message
+        const result = await sendWhatsAppMessage(lead.phone, message)
+
+        // Update lead's last_contact_at
+        await supabase
+            .from("leads")
+            .update({
+                last_contact_at: new Date().toISOString(),
+                status: "contacted"
+            })
+            .eq("id", lead.id)
+
+        // Create campaign send record if we have a campaign
+        if (campaign) {
+            await supabase.from("campaign_sends").insert({
+                organization_id: orgId,
+                campaign_id: campaign.id,
+                lead_id: lead.id,
+                status: result.success ? "sent" : "failed",
+                sent_at: result.success ? new Date().toISOString() : null,
+                error_message: result.error || null,
+            })
+        }
+
+        if (result.success) {
+            messagesSent++
+            console.log(`[marketing] Lead follow-up sent to ${lead.name ?? "Unknown"} at ${lead.phone}`)
+        } else {
+            messageErrors++
+            console.error(`[marketing] Failed lead follow-up for ${lead.name ?? "Unknown"}: ${result.error}`)
+        }
+
+        processed++
     }
 
-    return leads.length
+    return { processed, messagesSent, messageErrors }
 }
 
 async function sendNpsRequests(
     supabase: ReturnType<typeof getServiceClient>,
     orgId: string
-): Promise<number> {
+): Promise<CampaignResult> {
     // Get appointments completed 24h ago that haven't received NPS request
-    const windowStart = new Date(
-        Date.now() - 25 * 60 * 60 * 1000
-    ).toISOString()
+    const windowStart = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
     const windowEnd = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString()
 
     const { data: appointments, error } = await supabase
@@ -265,15 +353,15 @@ async function sendNpsRequests(
 
     if (error) {
         console.error("[marketing] Error fetching NPS appointments:", error)
-        return 0
+        return { processed: 0, messagesSent: 0, messageErrors: 0 }
     }
 
-    if (!appointments?.length) return 0
+    if (!appointments?.length) return { processed: 0, messagesSent: 0, messageErrors: 0 }
 
     // Get or create NPS campaign
     let { data: campaign } = await supabase
         .from("drip_campaigns")
-        .select("id")
+        .select("id, message_template")
         .eq("organization_id", orgId)
         .eq("type", "nps")
         .eq("is_active", true)
@@ -292,19 +380,21 @@ async function sendNpsRequests(
                     "Hola {{name}}, gracias por tu visita. Del 0 al 10, ¿qué tan probable es que nos recomiendes? Responde con un número.",
                 is_active: true,
             })
-            .select("id")
+            .select("id, message_template")
             .single()
 
         campaign = newCampaign
     }
 
-    if (!campaign) return 0
+    if (!campaign) return { processed: 0, messagesSent: 0, messageErrors: 0 }
 
-    let sentCount = 0
+    let processed = 0
+    let messagesSent = 0
+    let messageErrors = 0
 
     for (const apt of appointments) {
         const patient = apt.patient as { id: string; full_name: string; whatsapp_number: string } | null
-        if (!patient) continue
+        if (!patient || !patient.whatsapp_number) continue
 
         // Check if already has feedback for this appointment
         const { data: existingFeedback } = await supabase
@@ -326,22 +416,35 @@ async function sendNpsRequests(
 
         if (existingSend?.length) continue // Already sent
 
-        // Create campaign send
+        // Build message from template
+        const message = (campaign.message_template || "Hola {{name}}, ¿cómo fue tu visita? (0-10)")
+            .replace(/\{\{name\}\}/g, patient.full_name.split(" ")[0])
+
+        // Send WhatsApp message
+        const result = await sendWhatsAppMessage(patient.whatsapp_number, message)
+
+        // Create campaign send record
         await supabase.from("campaign_sends").insert({
             organization_id: orgId,
             campaign_id: campaign.id,
             patient_id: patient.id,
-            status: "pending",
+            status: result.success ? "sent" : "failed",
+            sent_at: result.success ? new Date().toISOString() : null,
+            error_message: result.error || null,
         })
 
-        // TODO: Actually send WhatsApp message
-        console.log(
-            `[marketing] NPS request for ${patient.full_name} at ${patient.whatsapp_number}`
-        )
-        sentCount++
+        if (result.success) {
+            messagesSent++
+            console.log(`[marketing] NPS request sent to ${patient.full_name} at ${patient.whatsapp_number}`)
+        } else {
+            messageErrors++
+            console.error(`[marketing] Failed NPS for ${patient.full_name}: ${result.error}`)
+        }
+
+        processed++
     }
 
-    return sentCount
+    return { processed, messagesSent, messageErrors }
 }
 
 // For Vercel Cron

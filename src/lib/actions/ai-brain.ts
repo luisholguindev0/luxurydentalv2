@@ -23,15 +23,78 @@ function getAdminClient() {
 }
 
 const TIMEZONE = "America/Bogota"
-const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001"
+
+// Cache for organization lookups (in-memory, resets on cold start)
+const orgCache = new Map<string, { orgId: string; expiresAt: number }>()
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * Resolve organization from WhatsApp Phone Number ID
+ * 
+ * Multi-tenancy approach:
+ * 1. WhatsApp Phone Number ID → Organization (stored in org settings)
+ * 2. Fallback: Use first active organization (single-tenant mode)
+ * 
+ * To configure multi-tenant:
+ * UPDATE organizations 
+ * SET settings = jsonb_set(settings, '{whatsapp_phone_number_id}', '"YOUR_PHONE_ID"')
+ * WHERE id = 'your-org-id';
+ */
+export async function resolveOrganization(whatsappPhoneNumberId?: string): Promise<string | null> {
+    const supabase = getAdminClient()
+
+    // Check cache first
+    if (whatsappPhoneNumberId) {
+        const cached = orgCache.get(whatsappPhoneNumberId)
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.orgId
+        }
+    }
+
+    // Try to find org by WhatsApp Phone Number ID
+    if (whatsappPhoneNumberId) {
+        const { data: org } = await supabase
+            .from("organizations")
+            .select("id")
+            .eq("settings->whatsapp_phone_number_id", whatsappPhoneNumberId)
+            .single()
+
+        if (org) {
+            // Cache the result
+            orgCache.set(whatsappPhoneNumberId, {
+                orgId: org.id,
+                expiresAt: Date.now() + CACHE_TTL_MS,
+            })
+            return org.id
+        }
+    }
+
+    // Fallback: Get first organization (single-tenant mode)
+    const { data: firstOrg } = await supabase
+        .from("organizations")
+        .select("id")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single()
+
+    if (firstOrg) {
+        console.warn("[AIBrain] Using fallback organization - configure settings.whatsapp_phone_number_id for multi-tenant")
+        return firstOrg.id
+    }
+
+    console.error("[AIBrain] No organization found!")
+    return null
+}
+
 
 /**
  * Get or create a contact from phone number
+ * organizationId is required - use resolveOrganization() to get it
  */
 export async function getOrCreateContact(
     phone: string,
-    profileName?: string,
-    organizationId: string = DEFAULT_ORG_ID
+    organizationId: string,
+    profileName?: string
 ): Promise<Contact | null> {
     const supabase = getAdminClient()
     const cleanPhone = phone.replace(/[^\d+]/g, "")
@@ -250,14 +313,19 @@ export async function buildConversationContext(contact: Contact): Promise<Conver
 
 /**
  * Handle incoming WhatsApp message end-to-end
+ * 
+ * @param phone - The sender's phone number
+ * @param messageContent - The message text or transcription
+ * @param organizationId - The organization ID (from resolveOrganization)
+ * @param profileName - Optional WhatsApp profile name
  */
 export async function handleIncomingMessage(
     phone: string,
     messageContent: string,
-    profileName?: string,
-    organizationId: string = DEFAULT_ORG_ID
+    organizationId: string,
+    profileName?: string
 ): Promise<string> {
-    const contact = await getOrCreateContact(phone, profileName, organizationId)
+    const contact = await getOrCreateContact(phone, organizationId, profileName)
 
     if (!contact) {
         return "Lo siento, estamos experimentando dificultades. Intenta de nuevo más tarde."
