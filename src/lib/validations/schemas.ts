@@ -58,3 +58,19 @@ export const leadUpdateSchema = leadCreateSchema.partial().extend({
 
 export type LeadCreateInput = z.infer<typeof leadCreateSchema>
 export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>
+
+// Transaction Schemas
+export const transactionCreateSchema = z.object({
+    type: z.enum(["income", "expense", "payment", "charge"], {
+        error: "Tipo de transacción inválido",
+    }),
+    amount: z.number().positive("El monto debe ser mayor a 0"),
+    description: z.string().min(1, "La descripción es requerida"),
+    patient_id: z.string().uuid("ID de paciente inválido").optional().nullable(),
+    appointment_id: z.string().uuid("ID de cita inválido").optional().nullable(),
+})
+
+export const transactionUpdateSchema = transactionCreateSchema.partial()
+
+export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>
+export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>

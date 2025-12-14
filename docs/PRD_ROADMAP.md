@@ -507,15 +507,15 @@ Sunday:    CLOSED
 
 ### Phase 4: Business Intelligence
 **Duration**: 3 days  
-**Status**: `[ ]`
+**Status**: `[x]`
 
-- [ ] Create transactions table
-- [ ] Build transaction recording
-- [ ] Create financial dashboard
-- [ ] Build revenue charts
-- [ ] Implement no-show prediction RPC
-- [ ] Implement revenue forecast RPC
-- [ ] Add patient financial tab
+- [x] Create transactions table (already in schema)
+- [x] Build transaction recording
+- [x] Create financial dashboard
+- [x] Build revenue charts
+- [x] Implement no-show prediction RPC
+- [x] Implement revenue forecast RPC
+- [x] Add patient financial tab
 
 ### Phase 5: Marketing Automation
 **Duration**: 3 days  

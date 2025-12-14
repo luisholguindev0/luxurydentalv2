@@ -417,3 +417,226 @@ export async function getAvailableSlots(
         return handleActionError(error)
     }
 }
+
+// No-show prediction types
+export type PatientNoShowRisk = {
+    patientId: string
+    patientName: string
+    riskScore: number // 0-100
+    riskLevel: "low" | "medium" | "high"
+    totalAppointments: number
+    noShowCount: number
+    cancelledCount: number
+    noShowRate: number
+    lastNoShow: string | null
+}
+
+/**
+ * Get no-show prediction scores for patients
+ * Calculates risk based on historical appointment behavior
+ */
+export async function getNoShowPredictions(options?: {
+    patientId?: string
+    minAppointments?: number // Only include patients with at least N appointments
+}): Promise<ActionResult<PatientNoShowRisk[]>> {
+    try {
+        const orgId = await getOrgId()
+        if (!orgId) {
+            return { success: false, error: "No autorizado" }
+        }
+
+        const supabase = await createClient()
+
+        // Get all appointments with patient info
+        let query = supabase
+            .from("appointments")
+            .select(`
+                id,
+                status,
+                start_time,
+                patient_id,
+                patient:patients(id, full_name)
+            `)
+            .eq("organization_id", orgId)
+            .not("patient_id", "is", null)
+
+        if (options?.patientId) {
+            query = query.eq("patient_id", options.patientId)
+        }
+
+        const { data, error } = await query
+
+        if (error) throw error
+
+        const appointments = data ?? []
+
+        // Group by patient
+        const patientStats = new Map<string, {
+            patientId: string
+            patientName: string
+            total: number
+            noShows: number
+            cancelled: number
+            completed: number
+            lastNoShow: string | null
+            recentAppointments: { status: string; date: string }[]
+        }>()
+
+        for (const apt of appointments) {
+            const patientId = apt.patient_id!
+            // Supabase returns single relations as object, but TS may infer array
+            const patientData = apt.patient as unknown as { id: string; full_name: string } | null
+            const patientName = patientData?.full_name ?? "Desconocido"
+
+            if (!patientStats.has(patientId)) {
+                patientStats.set(patientId, {
+                    patientId,
+                    patientName,
+                    total: 0,
+                    noShows: 0,
+                    cancelled: 0,
+                    completed: 0,
+                    lastNoShow: null,
+                    recentAppointments: [],
+                })
+            }
+
+            const stats = patientStats.get(patientId)!
+            stats.total++
+
+            if (apt.status === "no_show") {
+                stats.noShows++
+                if (!stats.lastNoShow || apt.start_time > stats.lastNoShow) {
+                    stats.lastNoShow = apt.start_time
+                }
+            } else if (apt.status === "cancelled") {
+                stats.cancelled++
+            } else if (apt.status === "completed") {
+                stats.completed++
+            }
+
+            // Track recent appointments (for recency weighting)
+            stats.recentAppointments.push({
+                status: apt.status ?? "scheduled",
+                date: apt.start_time,
+            })
+        }
+
+        // Calculate risk scores
+        const minAppointments = options?.minAppointments ?? 1
+        const predictions: PatientNoShowRisk[] = []
+
+        for (const stats of patientStats.values()) {
+            if (stats.total < minAppointments) continue
+
+            // Base no-show rate (40% weight)
+            const noShowRate = stats.noShows / stats.total
+            const baseScore = noShowRate * 100 * 0.4
+
+            // Recency factor - more recent no-shows increase risk (30% weight)
+            let recencyScore = 0
+            if (stats.lastNoShow) {
+                const daysSinceLastNoShow = Math.floor(
+                    (Date.now() - new Date(stats.lastNoShow).getTime()) / (1000 * 60 * 60 * 24)
+                )
+                // Recent no-shows (within 30 days) get higher recency score
+                recencyScore = Math.max(0, 100 - daysSinceLastNoShow * 3) * 0.3
+            }
+
+            // Cancellation pattern (15% weight) - high cancellation also indicates risk
+            const cancellationRate = stats.cancelled / stats.total
+            const cancellationScore = cancellationRate * 100 * 0.15
+
+            // Low appointment count penalty (15% weight) - new patients with any no-show are riskier
+            let volumePenalty = 0
+            if (stats.total < 5 && stats.noShows > 0) {
+                volumePenalty = (5 - stats.total) * 5 * 0.15
+            }
+
+            // Calculate final score
+            const riskScore = Math.min(100, Math.round(
+                baseScore + recencyScore + cancellationScore + volumePenalty
+            ))
+
+            // Determine risk level
+            let riskLevel: "low" | "medium" | "high" = "low"
+            if (riskScore >= 70) {
+                riskLevel = "high"
+            } else if (riskScore >= 40) {
+                riskLevel = "medium"
+            }
+
+            predictions.push({
+                patientId: stats.patientId,
+                patientName: stats.patientName,
+                riskScore,
+                riskLevel,
+                totalAppointments: stats.total,
+                noShowCount: stats.noShows,
+                cancelledCount: stats.cancelled,
+                noShowRate: Math.round(noShowRate * 100),
+                lastNoShow: stats.lastNoShow,
+            })
+        }
+
+        // Sort by risk score descending
+        predictions.sort((a, b) => b.riskScore - a.riskScore)
+
+        return { success: true, data: predictions }
+    } catch (error) {
+        return handleActionError(error)
+    }
+}
+
+/**
+ * Get high-risk upcoming appointments
+ * Combines no-show prediction with upcoming appointment schedule
+ */
+export async function getHighRiskAppointments(): Promise<ActionResult<{
+    appointment: AppointmentWithRelations
+    riskScore: number
+    riskLevel: "low" | "medium" | "high"
+}[]>> {
+    try {
+        const orgId = await getOrgId()
+        if (!orgId) {
+            return { success: false, error: "No autorizado" }
+        }
+
+        // Get upcoming appointments (next 7 days)
+        const now = new Date()
+        const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+        const [appointmentsResult, predictionsResult] = await Promise.all([
+            getAppointments(now.toISOString(), weekLater.toISOString()),
+            getNoShowPredictions({ minAppointments: 1 }),
+        ])
+
+        if (!appointmentsResult.success || !predictionsResult.success) {
+            return { success: false, error: "Error al obtener datos" }
+        }
+
+        const riskMap = new Map(
+            predictionsResult.data.map(p => [p.patientId, p])
+        )
+
+        const highRiskAppointments = appointmentsResult.data
+            .filter(apt =>
+                apt.status === "scheduled" || apt.status === "confirmed"
+            )
+            .map(apt => {
+                const risk = apt.patient ? riskMap.get(apt.patient.id) : null
+                return {
+                    appointment: apt,
+                    riskScore: risk?.riskScore ?? 0,
+                    riskLevel: (risk?.riskLevel ?? "low") as "low" | "medium" | "high",
+                }
+            })
+            .filter(item => item.riskScore >= 40) // Only medium and high risk
+            .sort((a, b) => b.riskScore - a.riskScore)
+
+        return { success: true, data: highRiskAppointments }
+    } catch (error) {
+        return handleActionError(error)
+    }
+}
