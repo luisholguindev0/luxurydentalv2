@@ -74,3 +74,30 @@ export const transactionUpdateSchema = transactionCreateSchema.partial()
 
 export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>
+
+// Drip Campaign Schemas
+export const campaignCreateSchema = z.object({
+    name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+    type: z.enum(["reactivation", "nps", "reminder", "promotion"], {
+        error: "Tipo de campaña inválido",
+    }),
+    trigger_condition: z.record(z.string(), z.unknown()).default({}),
+    message_template: z.string().min(10, "El mensaje debe tener al menos 10 caracteres"),
+    is_active: z.boolean().default(true),
+})
+
+export const campaignUpdateSchema = campaignCreateSchema.partial()
+
+export type CampaignCreateInput = z.infer<typeof campaignCreateSchema>
+export type CampaignUpdateInput = z.infer<typeof campaignUpdateSchema>
+
+// Patient Feedback Schemas
+export const feedbackCreateSchema = z.object({
+    patient_id: z.string().uuid("ID de paciente inválido"),
+    appointment_id: z.string().uuid("ID de cita inválido").optional().nullable(),
+    nps_score: z.number().min(0).max(10, "El NPS debe ser entre 0 y 10").optional().nullable(),
+    feedback_text: z.string().optional().nullable(),
+    collected_via: z.enum(["whatsapp", "web", "manual"]).default("whatsapp"),
+})
+
+export type FeedbackCreateInput = z.infer<typeof feedbackCreateSchema>

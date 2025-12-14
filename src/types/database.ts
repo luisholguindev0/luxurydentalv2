@@ -108,6 +108,179 @@ export type Database = {
                     },
                 ]
             }
+            campaign_sends: {
+                Row: {
+                    campaign_id: string
+                    created_at: string | null
+                    delivered_at: string | null
+                    error_message: string | null
+                    id: string
+                    lead_id: string | null
+                    organization_id: string
+                    patient_id: string | null
+                    sent_at: string | null
+                    status: string
+                }
+                Insert: {
+                    campaign_id: string
+                    created_at?: string | null
+                    delivered_at?: string | null
+                    error_message?: string | null
+                    id?: string
+                    lead_id?: string | null
+                    organization_id: string
+                    patient_id?: string | null
+                    sent_at?: string | null
+                    status?: string
+                }
+                Update: {
+                    campaign_id?: string
+                    created_at?: string | null
+                    delivered_at?: string | null
+                    error_message?: string | null
+                    id?: string
+                    lead_id?: string | null
+                    organization_id?: string
+                    patient_id?: string | null
+                    sent_at?: string | null
+                    status?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "campaign_sends_campaign_id_fkey"
+                        columns: ["campaign_id"]
+                        isOneToOne: false
+                        referencedRelation: "drip_campaigns"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "campaign_sends_lead_id_fkey"
+                        columns: ["lead_id"]
+                        isOneToOne: false
+                        referencedRelation: "leads"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "campaign_sends_organization_id_fkey"
+                        columns: ["organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "campaign_sends_patient_id_fkey"
+                        columns: ["patient_id"]
+                        isOneToOne: false
+                        referencedRelation: "patients"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            conversation_summaries: {
+                Row: {
+                    created_at: string | null
+                    id: string
+                    key_facts: Json | null
+                    lead_id: string | null
+                    message_range_end: string | null
+                    message_range_start: string | null
+                    organization_id: string
+                    patient_id: string | null
+                    summary: string
+                }
+                Insert: {
+                    created_at?: string | null
+                    id?: string
+                    key_facts?: Json | null
+                    lead_id?: string | null
+                    message_range_end?: string | null
+                    message_range_start?: string | null
+                    organization_id: string
+                    patient_id?: string | null
+                    summary: string
+                }
+                Update: {
+                    created_at?: string | null
+                    id?: string
+                    key_facts?: Json | null
+                    lead_id?: string | null
+                    message_range_end?: string | null
+                    message_range_start?: string | null
+                    organization_id?: string
+                    patient_id?: string | null
+                    summary?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "conversation_summaries_lead_id_fkey"
+                        columns: ["lead_id"]
+                        isOneToOne: false
+                        referencedRelation: "leads"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "conversation_summaries_organization_id_fkey"
+                        columns: ["organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "conversation_summaries_patient_id_fkey"
+                        columns: ["patient_id"]
+                        isOneToOne: false
+                        referencedRelation: "patients"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            drip_campaigns: {
+                Row: {
+                    created_at: string | null
+                    id: string
+                    is_active: boolean | null
+                    message_template: string
+                    name: string
+                    organization_id: string
+                    send_count: number | null
+                    trigger_condition: Json
+                    type: Database["public"]["Enums"]["campaign_type"]
+                    updated_at: string | null
+                }
+                Insert: {
+                    created_at?: string | null
+                    id?: string
+                    is_active?: boolean | null
+                    message_template: string
+                    name: string
+                    organization_id: string
+                    send_count?: number | null
+                    trigger_condition?: Json
+                    type: Database["public"]["Enums"]["campaign_type"]
+                    updated_at?: string | null
+                }
+                Update: {
+                    created_at?: string | null
+                    id?: string
+                    is_active?: boolean | null
+                    message_template?: string
+                    name?: string
+                    organization_id?: string
+                    send_count?: number | null
+                    trigger_condition?: Json
+                    type?: Database["public"]["Enums"]["campaign_type"]
+                    updated_at?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "drip_campaigns_organization_id_fkey"
+                        columns: ["organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
             inventory_items: {
                 Row: {
                     created_at: string | null
@@ -354,6 +527,61 @@ export type Database = {
                     },
                     {
                         foreignKeyName: "patient_documents_patient_id_fkey"
+                        columns: ["patient_id"]
+                        isOneToOne: false
+                        referencedRelation: "patients"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            patient_feedback: {
+                Row: {
+                    appointment_id: string | null
+                    collected_via: string | null
+                    created_at: string | null
+                    feedback_text: string | null
+                    id: string
+                    nps_score: number | null
+                    organization_id: string
+                    patient_id: string
+                }
+                Insert: {
+                    appointment_id?: string | null
+                    collected_via?: string | null
+                    created_at?: string | null
+                    feedback_text?: string | null
+                    id?: string
+                    nps_score?: number | null
+                    organization_id: string
+                    patient_id: string
+                }
+                Update: {
+                    appointment_id?: string | null
+                    collected_via?: string | null
+                    created_at?: string | null
+                    feedback_text?: string | null
+                    id?: string
+                    nps_score?: number | null
+                    organization_id?: string
+                    patient_id?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "patient_feedback_appointment_id_fkey"
+                        columns: ["appointment_id"]
+                        isOneToOne: false
+                        referencedRelation: "appointments"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "patient_feedback_organization_id_fkey"
+                        columns: ["organization_id"]
+                        isOneToOne: false
+                        referencedRelation: "organizations"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "patient_feedback_patient_id_fkey"
                         columns: ["patient_id"]
                         isOneToOne: false
                         referencedRelation: "patients"

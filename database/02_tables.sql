@@ -164,3 +164,66 @@ CREATE TRIGGER set_timestamp_patients BEFORE UPDATE ON public.patients FOR EACH 
 CREATE TRIGGER set_timestamp_leads BEFORE UPDATE ON public.leads FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 CREATE TRIGGER set_timestamp_appointments BEFORE UPDATE ON public.appointments FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 CREATE TRIGGER set_timestamp_inventory BEFORE UPDATE ON public.inventory_items FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
+
+-- 13. DRIP CAMPAIGNS (Campaign definitions)
+CREATE TABLE public.drip_campaigns (
+    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id),
+    name TEXT NOT NULL,
+    type public.campaign_type NOT NULL,
+    trigger_condition JSONB NOT NULL DEFAULT '{}'::jsonb,
+    message_template TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    send_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 14. CAMPAIGN SENDS (Individual send tracking)
+CREATE TABLE public.campaign_sends (
+    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id),
+    campaign_id UUID NOT NULL REFERENCES public.drip_campaigns(id) ON DELETE CASCADE,
+    patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+    lead_id UUID REFERENCES public.leads(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'failed', 'clicked')),
+    sent_at TIMESTAMP WITH TIME ZONE,
+    delivered_at TIMESTAMP WITH TIME ZONE,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT campaign_send_recipient_check CHECK (
+        (patient_id IS NOT NULL AND lead_id IS NULL) OR 
+        (patient_id IS NULL AND lead_id IS NOT NULL)
+    )
+);
+
+-- 15. PATIENT FEEDBACK (NPS collection)
+CREATE TABLE public.patient_feedback (
+    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id),
+    patient_id UUID NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
+    nps_score INTEGER CHECK (nps_score >= 0 AND nps_score <= 10),
+    feedback_text TEXT,
+    collected_via TEXT DEFAULT 'whatsapp' CHECK (collected_via IN ('whatsapp', 'web', 'manual')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 16. CONVERSATION SUMMARIES (Memory compression for AI)
+CREATE TABLE public.conversation_summaries (
+    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id),
+    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    lead_id UUID REFERENCES public.leads(id) ON DELETE CASCADE,
+    summary TEXT NOT NULL,
+    key_facts JSONB DEFAULT '[]'::jsonb,
+    message_range_start TIMESTAMP WITH TIME ZONE,
+    message_range_end TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT summary_owner_check CHECK (
+        (patient_id IS NOT NULL AND lead_id IS NULL) OR 
+        (patient_id IS NULL AND lead_id IS NOT NULL)
+    )
+);
+
+CREATE TRIGGER set_timestamp_drip_campaigns BEFORE UPDATE ON public.drip_campaigns FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();

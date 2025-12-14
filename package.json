@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:ai": "tsx scripts/ai-qa-test.ts"
+    "test:ai": "tsx scripts/ai-qa-test.ts",
+    "test:crons": "./scripts/test-crons-local.sh",
+    "test:smart-monitor": "curl -X POST -H 'Authorization: Bearer '${CRON_SECRET} http://localhost:3000/api/cron/smart-monitor | jq",
+    "test:marketing": "curl -X POST -H 'Authorization: Bearer '${CRON_SECRET} http://localhost:3000/api/cron/marketing | jq"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

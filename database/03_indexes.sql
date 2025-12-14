@@ -41,3 +41,27 @@ CREATE INDEX idx_inventory_org_id ON public.inventory_items(organization_id);
 -- Knowledge Docs
 CREATE INDEX idx_knowledge_docs_org_id ON public.knowledge_docs(organization_id);
 -- Vector index would go here if we had data, usually HNSW
+
+-- Drip Campaigns
+CREATE INDEX idx_drip_campaigns_org_id ON public.drip_campaigns(organization_id);
+CREATE INDEX idx_drip_campaigns_type ON public.drip_campaigns(type);
+CREATE INDEX idx_drip_campaigns_active ON public.drip_campaigns(is_active) WHERE is_active = true;
+
+-- Campaign Sends
+CREATE INDEX idx_campaign_sends_org_id ON public.campaign_sends(organization_id);
+CREATE INDEX idx_campaign_sends_campaign_id ON public.campaign_sends(campaign_id);
+CREATE INDEX idx_campaign_sends_patient_id ON public.campaign_sends(patient_id);
+CREATE INDEX idx_campaign_sends_lead_id ON public.campaign_sends(lead_id);
+CREATE INDEX idx_campaign_sends_status ON public.campaign_sends(status);
+CREATE INDEX idx_campaign_sends_pending ON public.campaign_sends(status, created_at) WHERE status = 'pending';
+
+-- Patient Feedback
+CREATE INDEX idx_patient_feedback_org_id ON public.patient_feedback(organization_id);
+CREATE INDEX idx_patient_feedback_patient_id ON public.patient_feedback(patient_id);
+CREATE INDEX idx_patient_feedback_nps ON public.patient_feedback(nps_score);
+CREATE INDEX idx_patient_feedback_recent ON public.patient_feedback(created_at DESC);
+
+-- Conversation Summaries
+CREATE INDEX idx_conversation_summaries_org_id ON public.conversation_summaries(organization_id);
+CREATE INDEX idx_conversation_summaries_patient_id ON public.conversation_summaries(patient_id);
+CREATE INDEX idx_conversation_summaries_lead_id ON public.conversation_summaries(lead_id);

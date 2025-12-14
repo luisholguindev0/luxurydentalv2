@@ -91,3 +91,27 @@ CREATE POLICY "Access inventory in org" ON public.inventory_items
 CREATE POLICY "Access documents in org" ON public.patient_documents
     FOR ALL
     USING (organization_id = public.get_auth_org_id());
+
+-- 11. Drip Campaigns
+ALTER TABLE public.drip_campaigns ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Access drip campaigns in org" ON public.drip_campaigns
+    FOR ALL
+    USING (organization_id = public.get_auth_org_id());
+
+-- 12. Campaign Sends
+ALTER TABLE public.campaign_sends ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Access campaign sends in org" ON public.campaign_sends
+    FOR ALL
+    USING (organization_id = public.get_auth_org_id());
+
+-- 13. Patient Feedback
+ALTER TABLE public.patient_feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Access patient feedback in org" ON public.patient_feedback
+    FOR ALL
+    USING (organization_id = public.get_auth_org_id());
+
+-- 14. Conversation Summaries
+ALTER TABLE public.conversation_summaries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Access conversation summaries in org" ON public.conversation_summaries
+    FOR ALL
+    USING (organization_id = public.get_auth_org_id());
