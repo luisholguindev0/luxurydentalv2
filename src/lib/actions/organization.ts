@@ -99,13 +99,13 @@ export async function getBusinessHours(): Promise<ActionResult<{
         return {
             success: true,
             data: {
-                monday: businessHours.monday ?? { open: "08:00", close: "18:00" },
-                tuesday: businessHours.tuesday ?? { open: "08:00", close: "18:00" },
-                wednesday: businessHours.wednesday ?? { open: "08:00", close: "18:00" },
-                thursday: businessHours.thursday ?? { open: "08:00", close: "18:00" },
-                friday: businessHours.friday ?? { open: "08:00", close: "18:00" },
-                saturday: businessHours.saturday ?? { open: "08:00", close: "14:00" },
-                sunday: businessHours.sunday ?? null,
+                monday: businessHours.monday === undefined ? { open: "08:00", close: "18:00" } : businessHours.monday,
+                tuesday: businessHours.tuesday === undefined ? { open: "08:00", close: "18:00" } : businessHours.tuesday,
+                wednesday: businessHours.wednesday === undefined ? { open: "08:00", close: "18:00" } : businessHours.wednesday,
+                thursday: businessHours.thursday === undefined ? { open: "08:00", close: "18:00" } : businessHours.thursday,
+                friday: businessHours.friday === undefined ? { open: "08:00", close: "18:00" } : businessHours.friday,
+                saturday: businessHours.saturday === undefined ? { open: "08:00", close: "14:00" } : businessHours.saturday,
+                sunday: businessHours.sunday === undefined ? null : businessHours.sunday,
             },
         }
     } catch (error) {

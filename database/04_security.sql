@@ -32,6 +32,11 @@ CREATE POLICY "Users can view own organization" ON public.organizations
     FOR SELECT
     USING (id = (SELECT organization_id FROM public.admin_users WHERE id = auth.uid()));
 
+CREATE POLICY "Users can update own organization" ON public.organizations
+    FOR UPDATE
+    USING (id = (SELECT organization_id FROM public.admin_users WHERE id = auth.uid()))
+    WITH CHECK (id = (SELECT organization_id FROM public.admin_users WHERE id = auth.uid()));
+
 -- 2. Admin Users
 -- Users can view other users in their org
 CREATE POLICY "Users can view colleagues" ON public.admin_users

@@ -644,3 +644,27 @@
 **Notes**:
 - The AI QA script is a local tool but shares types with the main app, so it must be kept in sync with type changes.
 ---
+
+## Session: 2025-12-14 18:15 (Critical Fixes)
+**Phase**: Maintenance / Polish
+
+**Completed**:
+- **Critical Security Fix**:
+  - Found and fixed a missing RLS policy for `organizations` table.
+  - Users can now successfully UPDATE their organization settings (Name, Slug, etc.) which was previously blocked by permissions.
+- **Business Hours Logic Fix**:
+  - Fixed a regression where "Closed" days (saved as `null`) were being overridden by default hours due to incorrect nullish coalescing usage.
+  - Implemented strict `undefined` checks to ensure explicit `null` (Closed) is respected.
+
+**Verification**:
+- ✅ `npm run build`: Success.
+- ✅ `grep -r "TODO" src/`: Clean (0 results).
+- ✅ Validated RLS policy application via `database/04_security.sql`.
+
+**Next Up**:
+- Deploy to Vercel (Production).
+- Verify end-to-end flow for changing settings and booking appointments on newly opened/closed days.
+
+**Notes**:
+- The "Services" deletion issue was likely a symptom of the same RLS strictness or cascading failures. Confirm in production that soft-deletes work as expected now that updates are allowed.
+---
