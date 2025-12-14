@@ -1,5 +1,30 @@
 # Handover Log
 
+## 2025-12-14 - Phase 1 Complete
+
+### Completed
+- Applied 4 migrations to Supabase:
+  - `initial_schema`: All 12 tables, types, enums, triggers.
+  - `indexes`: Performance indexes on all FKs.
+  - `rls_policies`: Row Level Security on all tables.
+  - `seed_data`: Default organization and services.
+- Generated TypeScript types from Supabase.
+- Created Zod validation schemas.
+- Built server actions: `patients.ts`, `services.ts`, `base.ts`.
+- Verified build (Success).
+
+### Next Steps (Phase 2: Calendar & Appointments)
+- Build Calendar component (week view).
+- Build time slot picker.
+- Implement appointment creation with conflict detection.
+- Add status transitions.
+
+### Notes
+- Using Zod v4 (`issues` instead of `errors` for error messages).
+- RLS helper function `get_auth_org_id()` is `SECURITY DEFINER`.
+
+---
+
 ## 2025-12-14 - Phase 0 Complete
 
 ### Completed

@@ -461,18 +461,18 @@ Sunday:    CLOSED
 
 ### Phase 1: Core Data
 **Duration**: 3 days  
-**Status**: `[ ]`
+**Status**: `[x]`
 
-- [ ] Design complete database schema
-- [ ] Implement all tables with constraints
-- [ ] Add all indexes
-- [ ] Write RLS policies
-- [ ] Create helper functions (update_updated_at, etc.)
-- [ ] Implement Organizations CRUD
-- [ ] Implement Admin Users management
-- [ ] Implement Patients CRUD
-- [ ] Implement Services catalog
-- [ ] Write TypeScript types matching DB
+- [x] Design complete database schema
+- [x] Implement all tables with constraints
+- [x] Add all indexes
+- [x] Write RLS policies
+- [x] Create helper functions (update_updated_at, etc.)
+- [x] Implement Organizations CRUD
+- [x] Implement Admin Users management
+- [x] Implement Patients CRUD
+- [x] Implement Services catalog
+- [x] Write TypeScript types matching DB
 
 ### Phase 2: Calendar & Appointments
 **Duration**: 3 days  
