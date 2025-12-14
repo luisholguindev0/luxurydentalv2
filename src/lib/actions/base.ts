@@ -9,17 +9,27 @@ import { revalidatePath } from "next/cache"
  */
 export async function getOrgId(): Promise<string | null> {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) return null
+    if (authError || !user) {
+        console.error("❌ [getOrgId] No authenticated user found:", authError)
+        return null
+    }
 
-    const { data: adminUser } = await supabase
+    console.log("✅ [getOrgId] User found:", user.id)
+
+    const { data: adminUser, error: dbError } = await supabase
         .from("admin_users")
         .select("organization_id")
         .eq("id", user.id)
         .single()
 
-    return adminUser?.organization_id ?? null
+    if (dbError || !adminUser) {
+        console.error("❌ [getOrgId] Admin profile lookup failed:", dbError)
+        return null
+    }
+
+    return adminUser.organization_id
 }
 
 /**
