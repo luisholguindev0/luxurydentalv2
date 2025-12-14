@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { Suspense } from "react"
 import { DollarSign, TrendingUp, Receipt, CreditCard } from "lucide-react"
 import { getTransactions, getFinancialSummary, getMonthlyBreakdown, getRevenueForecast } from "@/lib/actions/transactions"

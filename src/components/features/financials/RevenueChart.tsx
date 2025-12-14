@@ -12,6 +12,7 @@ import {
     ResponsiveContainer,
     Legend,
 } from "recharts"
+import { useEffect, useState } from "react"
 
 type RevenueChartProps = {
     data: MonthlyBreakdown[]
@@ -61,6 +62,18 @@ const CustomTooltip = ({ active, payload, label }: {
 }
 
 export function RevenueChart({ data, title = "Ingresos vs Gastos" }: RevenueChartProps) {
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) return (
+        <Card className="h-[300px] flex items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-luxury-gold" />
+        </Card>
+    )
+
     return (
         <Card>
             <CardHeader>
