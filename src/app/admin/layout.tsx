@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -11,7 +12,9 @@ import {
     Package,
     Settings,
     MessageSquare,
-    LogOut
+    LogOut,
+    Menu,
+    X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -32,6 +35,7 @@ export default function AdminLayout({
     children: React.ReactNode
 }) {
     const pathname = usePathname()
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
     const isActive = (href: string) => {
         if (href === "/admin") {
@@ -42,8 +46,29 @@ export default function AdminLayout({
 
     return (
         <div className="flex h-screen bg-luxury-darker">
+            {/* Mobile Menu Button */}
+            <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-luxury-dark border border-luxury-gold/20 rounded-lg text-luxury-gold hover:bg-luxury-card transition-colors"
+                aria-label="Toggle menu"
+            >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+
+            {/* Mobile Overlay */}
+            {mobileMenuOpen && (
+                <div
+                    className="lg:hidden fixed inset-0 bg-black/50 z-30"
+                    onClick={() => setMobileMenuOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-64 flex flex-col bg-luxury-dark border-r border-white/10">
+            <aside className={cn(
+                "w-64 flex flex-col bg-luxury-dark border-r border-white/10 z-40",
+                "fixed lg:relative h-full transition-transform duration-300",
+                mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            )}>
                 {/* Logo */}
                 <div className="p-6 border-b border-white/10">
                     <h1 className="text-xl font-serif tracking-wide">
@@ -63,6 +88,7 @@ export default function AdminLayout({
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                onClick={() => setMobileMenuOpen(false)}
                                 className={cn(
                                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                                     active
@@ -92,7 +118,7 @@ export default function AdminLayout({
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden">
+            <main className="flex-1 flex flex-col overflow-hidden w-full lg:w-auto">
                 {children}
             </main>
         </div>

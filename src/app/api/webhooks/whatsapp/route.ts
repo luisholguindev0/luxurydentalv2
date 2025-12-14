@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server"
 import type { WhatsAppWebhookPayload, WhatsAppWebhookMessage } from "@/lib/ai/whatsapp"
 import { sendWhatsAppMessage, markMessageAsRead, downloadWhatsAppMedia } from "@/lib/ai/whatsapp"
 import { handleIncomingMessage } from "@/lib/actions/ai-brain"
+import { enforceRateLimit, RateLimits } from "@/lib/utils/rate-limit"
 
 /**
  * GET - Webhook Verification
@@ -39,6 +40,12 @@ export async function GET(request: NextRequest) {
  * POST - Handle Incoming Messages
  */
 export async function POST(request: NextRequest) {
+    // Rate limiting: 100 requests per 10 seconds per IP
+    const rateLimitResult = await enforceRateLimit(RateLimits.WHATSAPP_WEBHOOK)
+    if (rateLimitResult) {
+        return rateLimitResult
+    }
+
     try {
         const body = await request.text()
         const payload: WhatsAppWebhookPayload = JSON.parse(body)
