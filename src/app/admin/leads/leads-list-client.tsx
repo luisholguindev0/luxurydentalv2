@@ -257,11 +257,11 @@ export function LeadsListClient({ initialLeads, stats, totalPages, totalCount }:
                         </EmptyState>
                     )
                 ) : (
-                    <div className="bg-luxury-card border border-white/10 rounded-xl overflow-hidden">
+                    <div className="bg-luxury-card border border-white/10 rounded-xl">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-white/10">
-                                    <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium">
+                                    <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium first:rounded-tl-xl">
                                         Lead
                                     </th>
                                     <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium hidden md:table-cell">
@@ -273,7 +273,7 @@ export function LeadsListClient({ initialLeads, stats, totalPages, totalCount }:
                                     <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium hidden lg:table-cell">
                                         Último contacto
                                     </th>
-                                    <th className="text-right px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium">
+                                    <th className="text-right px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium last:rounded-tr-xl">
                                         Acciones
                                     </th>
                                 </tr>
@@ -284,8 +284,8 @@ export function LeadsListClient({ initialLeads, stats, totalPages, totalCount }:
                                     const StatusIcon = statusConf.icon
 
                                     return (
-                                        <tr key={lead.id} className="hover:bg-white/5 transition-colors">
-                                            <td className="px-4 py-4">
+                                        <tr key={lead.id} className="hover:bg-white/5 transition-colors group">
+                                            <td className="px-4 py-4 first:rounded-bl-xl group-last:first:rounded-bl-xl">
                                                 <div>
                                                     <p className="text-text-primary font-medium">
                                                         {lead.name || "Sin nombre"}
@@ -315,7 +315,7 @@ export function LeadsListClient({ initialLeads, stats, totalPages, totalCount }:
                                                         : "Nunca"}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-4">
+                                            <td className="px-4 py-4 last:rounded-br-xl group-last:last:rounded-br-xl">
                                                 <div className="flex items-center justify-end gap-1 relative">
                                                     <button
                                                         onClick={() => setOpenMenu(openMenu === lead.id ? null : lead.id)}
@@ -330,7 +330,7 @@ export function LeadsListClient({ initialLeads, stats, totalPages, totalCount }:
                                                                 className="fixed inset-0 z-10"
                                                                 onClick={() => setOpenMenu(null)}
                                                             />
-                                                            <div className="absolute right-0 top-full mt-1 z-20 bg-luxury-dark border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]">
+                                                            <div className="absolute right-0 top-full mt-1 z-50 bg-luxury-dark border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]">
                                                                 {lead.status !== "converted" && (
                                                                     <button
                                                                         onClick={() => handleConvert(lead.id)}
