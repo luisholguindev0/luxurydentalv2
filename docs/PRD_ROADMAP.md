@@ -476,16 +476,16 @@ Sunday:    CLOSED
 
 ### Phase 2: Calendar & Appointments
 **Duration**: 3 days  
-**Status**: `[ ]`
+**Status**: `[x]`
 
-- [ ] Build Calendar component (week view)
-- [ ] Build time slot picker
-- [ ] Implement appointment creation
-- [ ] Add conflict detection (DB constraint)
-- [ ] Implement status transitions
-- [ ] Add appointment editing
-- [ ] Add appointment cancellation
-- [ ] Build appointment list view
+- [x] Build Calendar component (week view)
+- [x] Build time slot picker
+- [x] Implement appointment creation
+- [x] Add conflict detection (DB constraint)
+- [x] Implement status transitions
+- [x] Add appointment editing
+- [x] Add appointment cancellation
+- [x] Build appointment list view
 
 ### Phase 3: The Brain
 **Duration**: 6 days  
