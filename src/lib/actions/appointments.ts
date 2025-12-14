@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache"
 import { getOrgId, handleActionError, type ActionResult } from "./base"
 import { appointmentCreateSchema, appointmentUpdateSchema } from "@/lib/validations/schemas"
 import type { Tables, Enums } from "@/types/database"
-import { validateBusinessHours, BUSINESS_HOURS } from "@/lib/utils/appointments"
+import { validateBusinessHours, type BusinessHoursConfig } from "@/lib/utils/appointments"
+import { getBusinessHoursConfig } from "@/lib/actions/organization"
 
 // Types
 type Appointment = Tables<"appointments">
@@ -16,11 +17,6 @@ export type AppointmentWithRelations = Appointment & {
     service: { id: string; title: string; duration_minutes: number; price: number } | null
 }
 
-
-
-/**
- * Check for conflicting appointments
- */
 /**
  * Check for conflicting appointments
  */
@@ -126,15 +122,13 @@ export async function getAppointmentById(id: string): Promise<ActionResult<Appoi
 }
 
 /**
- * Create a new appointment
- */
-/**
  * Internal implementation of createAppointment for testing
  */
 export async function createAppointmentInternal(
     supabase: Awaited<ReturnType<typeof createClient>>,
     orgId: string,
     input: unknown,
+    businessHoursConfig: BusinessHoursConfig,
     revalidateFn: (path: string) => void = revalidatePath
 ): Promise<ActionResult<Appointment>> {
     const parsed = appointmentCreateSchema.safeParse(input)
@@ -148,7 +142,7 @@ export async function createAppointmentInternal(
     const startDate = new Date(start_time)
     const endDate = new Date(end_time)
 
-    const hoursValidation = validateBusinessHours(startDate, endDate)
+    const hoursValidation = validateBusinessHours(startDate, endDate, businessHoursConfig)
     if (!hoursValidation.valid) {
         return { success: false, error: hoursValidation.error! }
     }
@@ -197,8 +191,12 @@ export async function createAppointment(
             return { success: false, error: "No autorizado" }
         }
 
-        const supabase = await createClient()
-        return createAppointmentInternal(supabase, orgId, input)
+        const [supabase, businessHours] = await Promise.all([
+            createClient(),
+            getBusinessHoursConfig()
+        ])
+
+        return createAppointmentInternal(supabase, orgId, input, businessHours)
     } catch (error) {
         return handleActionError(error)
     }
@@ -225,14 +223,17 @@ export async function updateAppointment(
 
         const { start_time, end_time, ...rest } = parsed.data
 
-        const supabase = await createClient()
+        const [supabase, businessHours] = await Promise.all([
+            createClient(),
+            getBusinessHoursConfig()
+        ])
 
         // If times are being updated, validate business hours and conflicts
         if (start_time && end_time) {
             const startDate = new Date(start_time)
             const endDate = new Date(end_time)
 
-            const hoursValidation = validateBusinessHours(startDate, endDate)
+            const hoursValidation = validateBusinessHours(startDate, endDate, businessHours)
             if (!hoursValidation.valid) {
                 return { success: false, error: hoursValidation.error! }
             }
@@ -348,11 +349,12 @@ export async function getAvailableSlotsInternal(
     supabase: Awaited<ReturnType<typeof createClient>>,
     orgId: string,
     date: string,
+    businessHoursConfig: BusinessHoursConfig,
     durationMinutes: number = 30
 ): Promise<ActionResult<{ time: string; available: boolean }[]>> {
     const targetDate = new Date(date)
-    const dayOfWeek = targetDate.getDay() as keyof typeof BUSINESS_HOURS
-    const hours = BUSINESS_HOURS[dayOfWeek]
+    const dayOfWeek = targetDate.getDay()
+    const hours = businessHoursConfig[dayOfWeek]
 
     if (!hours) {
         return { success: true, data: [] } // Closed day
@@ -360,32 +362,44 @@ export async function getAvailableSlotsInternal(
 
     // Get existing appointments for the day
     const dayStart = new Date(targetDate)
-    dayStart.setHours(0, 0, 0, 0)
+    dayStart.setUTCHours(0, 0, 0, 0)
     const dayEnd = new Date(targetDate)
-    dayEnd.setHours(23, 59, 59, 999)
+    dayEnd.setUTCHours(23, 59, 59, 999)
 
     const { data: existingAppointments, error } = await supabase
         .from("appointments")
         .select("start_time, end_time")
         .eq("organization_id", orgId)
         .neq("status", "cancelled")
-        .gte("start_time", dayStart.toISOString())
-        .lte("start_time", dayEnd.toISOString())
+        .gte("start_time", new Date(targetDate.getTime() - 86400000).toISOString())
+        .lte("start_time", new Date(targetDate.getTime() + 86400000).toISOString())
 
     if (error) throw error
 
     // Generate all possible slots
-    const slots: { time: string; available: boolean }[] = []
-    const slotTime = new Date(targetDate)
-    slotTime.setHours(hours.open, 0, 0, 0)
+    // Colombia is UTC-5
+    const TIMEZONE_OFFSET = 5
 
-    while (slotTime.getHours() + slotTime.getMinutes() / 60 + durationMinutes / 60 <= hours.close) {
+    const slots: { time: string; available: boolean }[] = []
+
+    // Start at Opening Time + Offset (e.g. 8AM + 5 = 13:00 UTC)
+    const slotTime = new Date(targetDate)
+    slotTime.setUTCHours(hours.open + TIMEZONE_OFFSET, 0, 0, 0)
+
+    // Calculate Close Time in UTC
+    const closeTime = new Date(targetDate)
+    closeTime.setUTCHours(hours.close + TIMEZONE_OFFSET, 0, 0, 0)
+
+    // Fix floating point comparison issues (e.g. 13:00 vs 13.00000001)
+    // Add small epsilon or simple less-than-or-equal check
+    while (slotTime.getTime() + durationMinutes * 60000 <= closeTime.getTime()) {
         const slotEnd = new Date(slotTime.getTime() + durationMinutes * 60000)
 
         // Check if slot conflicts with any existing appointment
         const isAvailable = !existingAppointments?.some(apt => {
             const aptStart = new Date(apt.start_time)
             const aptEnd = new Date(apt.end_time)
+            // Strict overlap check
             return slotTime < aptEnd && slotEnd > aptStart
         })
 
@@ -413,8 +427,12 @@ export async function getAvailableSlots(
             return { success: false, error: "No autorizado" }
         }
 
-        const supabase = await createClient()
-        return getAvailableSlotsInternal(supabase, orgId, date, durationMinutes)
+        const [supabase, businessHours] = await Promise.all([
+            createClient(),
+            getBusinessHoursConfig()
+        ])
+
+        return getAvailableSlotsInternal(supabase, orgId, date, businessHours, durationMinutes)
     } catch (error) {
         return handleActionError(error)
     }

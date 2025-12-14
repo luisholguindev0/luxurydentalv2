@@ -571,3 +571,30 @@
 **Next Up**:
 - Monitor production usage.
 - Feature requests (if any).
+
+## Session: 2025-12-14 17:50
+**Phase**: Maintenance / Polish (Appointment & UI Fixes)
+
+**Completed**:
+- **Critical Appointment Bugs**:
+  - **Timezone Handling**: Fixed `getAvailableSlotsInternal` to use UTC offsets, ensuring local 8 AM - 6 PM business hours are respected regardless of server timezone.
+  - **Calendar Grid**: Refactored `WeekCalendar.tsx` to use 30-minute slots, perfectly matching the appointment duration.
+  - **Edit Workflow**: Fixed `AppointmentCard` click event propagation so clicking an appointment opens the "Edit" modal instead of "Create New".
+  - **Dynamic Business Hours**: Updated backend to respect Organization-specific business hours (including closed days) instead of hardcoded defaults.
+
+- **UI/UX Polishing**:
+  - **Settings Persistence**: Added `revalidatePath` to organization and service actions (`updateOrganization`, `updateBusinessHours`, `createService`, `deleteService`) to ensure settings updates are immediately reflected in the UI.
+  - **Patient Actions Menu**: Fixed a layout bug where the "..." dropdown menu was clipped by `overflow-hidden` on the patient table container.
+
+**Verification**:
+- ✅ `npm run build`: Success.
+- ✅ `grep -r "TODO" src/`: Clean (0 results).
+- ✅ Validated fixes against user-reported issues (Time slots, Calendar display, Edit modal, Settings cache, Patient menu).
+
+**Next Up**:
+- Monitor dynamic business hours logic in production scenarios.
+- Consider adding visual indicators for "Closed" days in the calendar view explicitly (beyond just grayed out slots).
+
+**Notes**:
+- The calendar system now relies heavily on the `BusinessHoursConfig` propagated from the database. Ensure any future changes to `organizations.settings` maintain the `business_hours` structure.
+---

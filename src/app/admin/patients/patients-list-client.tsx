@@ -158,11 +158,11 @@ export function PatientsListClient({ initialPatients, totalPages, totalCount }: 
                         </EmptyState>
                     )
                 ) : (
-                    <div className="bg-luxury-card border border-white/10 rounded-xl overflow-hidden">
+                    <div className="bg-luxury-card border border-white/10 rounded-xl">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-white/10">
-                                    <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium">
+                                    <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium first:rounded-tl-xl">
                                         Paciente
                                     </th>
                                     <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium hidden md:table-cell">
@@ -171,7 +171,7 @@ export function PatientsListClient({ initialPatients, totalPages, totalCount }: 
                                     <th className="text-left px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium hidden lg:table-cell">
                                         Registrado
                                     </th>
-                                    <th className="text-right px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium">
+                                    <th className="text-right px-4 py-3 text-text-muted text-xs uppercase tracking-wider font-medium last:rounded-tr-xl">
                                         Acciones
                                     </th>
                                 </tr>
@@ -180,9 +180,9 @@ export function PatientsListClient({ initialPatients, totalPages, totalCount }: 
                                 {patients.map((patient) => (
                                     <tr
                                         key={patient.id}
-                                        className="hover:bg-white/5 transition-colors"
+                                        className="hover:bg-white/5 transition-colors group"
                                     >
-                                        <td className="px-4 py-4">
+                                        <td className="px-4 py-4 first:rounded-bl-xl group-last:first:rounded-bl-xl">
                                             <div>
                                                 <p className="text-text-primary font-medium">
                                                     {patient.full_name}
@@ -210,7 +210,7 @@ export function PatientsListClient({ initialPatients, totalPages, totalCount }: 
                                                 {patient.created_at && format(new Date(patient.created_at), "d MMM yyyy", { locale: es })}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-4 py-4 last:rounded-br-xl group-last:last:rounded-br-xl">
                                             <div className="flex items-center justify-end gap-1 relative">
                                                 <button
                                                     onClick={() => setOpenMenu(openMenu === patient.id ? null : patient.id)}
@@ -225,7 +225,7 @@ export function PatientsListClient({ initialPatients, totalPages, totalCount }: 
                                                             className="fixed inset-0 z-10"
                                                             onClick={() => setOpenMenu(null)}
                                                         />
-                                                        <div className="absolute right-0 top-full mt-1 z-20 bg-luxury-dark border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px]">
+                                                        <div className="absolute right-0 top-full mt-1 z-50 bg-luxury-dark border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px]">
                                                             <Link
                                                                 href={`/admin/patients/${patient.id}`}
                                                                 className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-white/5 transition-colors"

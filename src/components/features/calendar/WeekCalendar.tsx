@@ -51,12 +51,17 @@ export function WeekCalendar({
     const weekStart = useMemo(() => getWeekStart(currentDate), [currentDate])
     const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart])
 
-    const hours = useMemo(() =>
-        Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
-        []
-    )
+    // Generate 30-minute slots
+    const timeSlots = useMemo(() => {
+        const slots: { hour: number; minute: number }[] = []
+        for (let h = START_HOUR; h < END_HOUR; h++) {
+            slots.push({ hour: h, minute: 0 })
+            slots.push({ hour: h, minute: 30 })
+        }
+        return slots
+    }, [])
 
-    // Group appointments by day and hour
+    // Group appointments by day, hour and minute (30 min bucket)
     const appointmentsBySlot = useMemo(() => {
         const map = new Map<string, AppointmentWithRelations[]>()
 
@@ -64,7 +69,9 @@ export function WeekCalendar({
             const start = new Date(apt.start_time)
             const dayIndex = start.getDay()
             const hour = start.getHours()
-            const key = `${dayIndex}-${hour}`
+            // Bucket to nearest 30 min (though they should already be aligned)
+            const minute = start.getMinutes() < 30 ? 0 : 30
+            const key = `${dayIndex}-${hour}-${minute}`
 
             if (!map.has(key)) {
                 map.set(key, [])
@@ -155,28 +162,28 @@ export function WeekCalendar({
                     ))}
 
                     {/* Time Slots */}
-                    {hours.map(hour => (
+                    {timeSlots.map(({ hour, minute }) => (
                         <>
                             {/* Hour Label */}
                             <div
-                                key={`hour-${hour}`}
-                                className="p-2 text-right text-xs text-text-muted border-b border-white/5"
+                                key={`label-${hour}-${minute}`}
+                                className="p-2 text-right text-xs text-text-muted border-b border-white/5 flex items-center justify-end"
                             >
-                                {hour.toString().padStart(2, "0")}:00
+                                {hour.toString().padStart(2, "0")}:{minute.toString().padStart(2, "0")}
                             </div>
 
                             {/* Day Slots */}
                             {weekDays.map((day, dayIndex) => {
                                 const actualDayIndex = (dayIndex + 1) % 7
-                                const slotKey = `${actualDayIndex}-${hour}`
+                                const slotKey = `${actualDayIndex}-${hour}-${minute}`
                                 const slotAppointments = appointmentsBySlot.get(slotKey) || []
                                 const closed = isSunday(actualDayIndex) || (actualDayIndex === 6 && hour >= 14)
 
                                 return (
                                     <div
-                                        key={`${dayIndex}-${hour}`}
+                                        key={`${dayIndex}-${hour}-${minute}`}
                                         className={cn(
-                                            "min-h-[60px] p-1 border-b border-l border-white/5 transition-colors",
+                                            "min-h-[40px] p-1 border-b border-l border-white/5 transition-colors",
                                             closed
                                                 ? "bg-luxury-darker/50 cursor-not-allowed"
                                                 : "hover:bg-luxury-card/30 cursor-pointer"
@@ -184,7 +191,7 @@ export function WeekCalendar({
                                         onClick={() => {
                                             if (!closed && onSlotClick) {
                                                 const slotDate = new Date(day)
-                                                slotDate.setHours(hour, 0, 0, 0)
+                                                slotDate.setHours(hour, minute, 0, 0)
                                                 onSlotClick(slotDate, hour)
                                             }
                                         }}
@@ -193,13 +200,16 @@ export function WeekCalendar({
                                             <AppointmentCard
                                                 key={apt.id}
                                                 appointment={apt}
-                                                onClick={() => onAppointmentClick?.(apt)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    onAppointmentClick?.(apt)
+                                                }}
                                             />
                                         ))}
 
                                         {!closed && slotAppointments.length === 0 && (
                                             <div className="h-full flex items-center justify-center opacity-0 hover:opacity-50 transition-opacity">
-                                                <Plus className="h-4 w-4 text-text-muted" />
+                                                <Plus className="h-3 w-3 text-text-muted" />
                                             </div>
                                         )}
                                     </div>

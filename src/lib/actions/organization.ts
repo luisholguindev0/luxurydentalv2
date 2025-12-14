@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server"
 import { getOrgId, handleActionError, type ActionResult } from "./base"
 import { z } from "zod"
 import type { Tables } from "@/types/database"
+import { revalidatePath } from "next/cache"
+import { type BusinessHoursConfig, DEFAULT_BUSINESS_HOURS } from "@/lib/utils/appointments"
 
 type Organization = Tables<"organizations">
 
@@ -68,6 +70,7 @@ export async function updateOrganization(input: OrganizationUpdateInput): Promis
 
         if (error) throw error
 
+        revalidatePath("/admin/settings")
         return { success: true, data }
     } catch (error) {
         return handleActionError(error)
@@ -144,8 +147,52 @@ export async function updateBusinessHours(hours: Record<string, { open: string; 
 
         if (error) throw error
 
+        revalidatePath("/admin/settings")
+        revalidatePath("/admin/appointments")
         return { success: true, data: null }
     } catch (error) {
         return handleActionError(error)
     }
+}
+
+/**
+ * Get internal configuration for logic
+ */
+export async function getBusinessHoursConfig(): Promise<BusinessHoursConfig> {
+    const result = await getBusinessHours()
+    if (!result.success) return DEFAULT_BUSINESS_HOURS
+
+    const settings = result.data
+    const config: BusinessHoursConfig = { ...DEFAULT_BUSINESS_HOURS }
+
+    const dayMap: Record<string, number> = {
+        monday: 1,
+        tuesday: 2,
+        wednesday: 3,
+        thursday: 4,
+        friday: 5,
+        saturday: 6,
+        sunday: 0
+    }
+
+    Object.entries(settings).forEach(([day, hours]) => {
+        const dayIndex = dayMap[day]
+        if (dayIndex !== undefined) {
+            if (!hours) {
+                config[dayIndex] = null
+            } else {
+                config[dayIndex] = {
+                    open: parseTime(hours.open),
+                    close: parseTime(hours.close)
+                }
+            }
+        }
+    })
+
+    return config
+}
+
+function parseTime(timeStr: string): number {
+    const [hours, minutes] = timeStr.split(":").map(Number)
+    return hours + (minutes / 60)
 }

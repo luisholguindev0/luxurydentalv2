@@ -917,6 +917,10 @@ Before deploying to production, the following checks and tests were performed:
 3. **Error boundaries catch failures**: No white screens
 4. **Verify Schema Field-level**: Always check `types/database.ts` before assuming columns exist (avoided 'email' on leads bug)
 
+### Backend
+1. **Timezone Handling**: Always use `setUTCHours` + explicit offset (e.g. Colombian UTC-5) for server-side availability checks. Never rely on `getHours()` in serverless environments.
+2. **Event Propagation**: Nested click handlers in calendars must explicitly `stopPropagation()` to prevent conflicting UI actions (New vs Edit).
+
 ---
 
 ## 10. Glossary

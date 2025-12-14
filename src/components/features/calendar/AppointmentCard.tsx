@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 
 interface AppointmentCardProps {
     appointment: AppointmentWithRelations
-    onClick?: () => void
+    onClick?: (e: React.MouseEvent) => void
     compact?: boolean
 }
 
