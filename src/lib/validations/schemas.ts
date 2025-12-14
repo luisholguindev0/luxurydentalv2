@@ -101,3 +101,17 @@ export const feedbackCreateSchema = z.object({
 })
 
 export type FeedbackCreateInput = z.infer<typeof feedbackCreateSchema>
+
+// Inventory Schemas
+export const inventoryItemCreateSchema = z.object({
+    name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+    sku: z.string().optional().or(z.literal("")),
+    quantity: z.number().int().min(0, "La cantidad no puede ser negativa"),
+    min_stock_level: z.number().int().min(0, "El stock mínimo no puede ser negativo").optional(),
+    unit: z.string().optional().or(z.literal("")),
+})
+
+export const inventoryItemUpdateSchema = inventoryItemCreateSchema.partial()
+
+export type InventoryItemCreateInput = z.infer<typeof inventoryItemCreateSchema>
+export type InventoryItemUpdateInput = z.infer<typeof inventoryItemUpdateSchema>
