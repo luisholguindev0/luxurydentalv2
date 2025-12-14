@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  /* Core Luxury Palette */
+  --color-luxury-gold: #D4AF37;
+  --color-luxury-gold-light: #F5E6C8;
+  --color-luxury-dark: #1A1A2E;
+  --color-luxury-darker: #0F0F1A;
+  --color-luxury-card: #16213E;
+
+  /* Semantic */
+  --color-luxury-success: #2ECC71;
+  --color-luxury-warning: #F39C12;
+  --color-luxury-danger: #E74C3C;
+  --color-luxury-info: #4A90A4;
+}
+
+:root {
+  /* Text Colors */
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0AEC0;
+  --text-muted: #718096;
+
+  /* App Defaults (Dark Mode by default) */
+  --background: var(--color-luxury-dark);
+  --foreground: var(--text-primary);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Text Utilities */
+@utility text-primary {
+  color: var(--text-primary);
+}
+
+@utility text-secondary {
+  color: var(--text-secondary);
+}
+
+@utility text-muted {
+  color: var(--text-muted);
+}
