@@ -60,14 +60,20 @@ Configure the following environment variables in your Vercel Project Settings:
 
 *Note: You must set the environment variable `WHATSAPP_APP_SECRET` for security. The application will reject requests without a valid signature.*
 
-## 5. Cron Jobs (Vercel)
+## 5. Cron Jobs (Automation)
 
-The project includes `vercel.json` which automatically configures Cron Jobs on deployment.
+**Important**: We removed the `vercel.json` configuration because Vercel requires a paid Pro plan for frequent cron jobs (every minute).
 
-- **Smart Monitor**: Runs every minute (`* * * * *`). Handles reminders and auto-cancellations.
-- **Marketing**: Runs daily at 9 AM Bogotá time (`0 14 * * *`).
+To run your automation for free:
 
-*Ensure `CRON_SECRET` is set in Vercel, or crons will fail with 401 Unauthorized.*
+1.  **Deploy the App** first.
+2.  Use a free external service like **[Cron-Job.org](https://cron-job.org/)** or **GitHub Actions**.
+3.  Create two jobs in that external service:
+    *   **Job 1 (Smart Monitor)**: Call `https://<YOUR_APP_URL>/api/cron/smart-monitor` every **1 minute** (or 5 mins).
+    *   **Job 2 (Marketing)**: Call `https://<YOUR_APP_URL>/api/cron/marketing` once **daily**.
+4.  **Header Requirement**: Ensure the external service sends the header: `Authorization: Bearer <YOUR_CRON_SECRET>`.
+
+*If you don't set this up, the app works fine, but reminders and auto-cancellations won't run automatically.*
 
 ## 6. Verification Checklist
 
