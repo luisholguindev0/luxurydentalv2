@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Calendar, Clock, User, MoreHorizontal, Check, X, Phone } from "lucide-react"
-import { Button } from "@/components/ui/button"
+
 import { updateAppointmentStatus, cancelAppointment } from "@/lib/actions/appointments"
 import type { AppointmentWithRelations } from "@/lib/actions/appointments"
 import type { Enums } from "@/types/database"
@@ -162,7 +162,7 @@ export function AppointmentList({
 
                                             {apt.notes && (
                                                 <p className="text-sm text-text-muted mt-2 italic">
-                                                    "{apt.notes}"
+                                                    &ldquo;{apt.notes}&rdquo;
                                                 </p>
                                             )}
                                         </div>
