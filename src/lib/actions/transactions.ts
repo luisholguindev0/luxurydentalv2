@@ -36,12 +36,14 @@ export type MonthlyBreakdown = {
  * Get all transactions for the current organization
  */
 export async function getTransactions(options?: {
+    page?: number
     limit?: number
     startDate?: string
     endDate?: string
     type?: TransactionType
     patientId?: string
-}): Promise<ActionResult<TransactionWithPatient[]>> {
+    query?: string
+}): Promise<ActionResult<{ data: TransactionWithPatient[], totalCount: number, pageCount: number }>> {
     try {
         const supabase = await createClient()
         const orgId = await getOrgId()
@@ -50,19 +52,27 @@ export async function getTransactions(options?: {
             return { success: false, error: "No autorizado" }
         }
 
+        const page = options?.page || 1
+        const limit = options?.limit || 10
+        const offset = (page - 1) * limit
+
         let query = supabase
             .from("transactions")
             .select(`
                 *,
                 patient:patients(full_name)
-            `)
+            `, { count: "exact" })
             .eq("organization_id", orgId)
             .order("created_at", { ascending: false })
 
         // Apply filters
-        if (options?.limit) {
-            query = query.limit(options.limit)
+        if (options?.limit && !options?.page) {
+            // Backward compatibility or strictly limiting without pagination logic? 
+            // If implicit "page 1", just set offset 0.
+            // But if we want *just* recent 10, we still return the object structure?
+            // YES.
         }
+
         if (options?.startDate) {
             query = query.gte("created_at", options.startDate)
         }
@@ -75,12 +85,27 @@ export async function getTransactions(options?: {
         if (options?.patientId) {
             query = query.eq("patient_id", options.patientId)
         }
+        if (options?.query) {
+            query = query.ilike("description", `%${options.query}%`)
+            // Note: searching nested patient name in Supabase is hard in one query without join filtering tricks or Rpc.
+            // For now, search description.
+        }
 
-        const { data, error } = await query
+        const { data, error, count } = await query.range(offset, offset + limit - 1)
 
         if (error) throw error
 
-        return { success: true, data: (data ?? []) as TransactionWithPatient[] }
+        const totalCount = count || 0
+        const pageCount = Math.ceil(totalCount / limit)
+
+        return {
+            success: true,
+            data: {
+                data: (data ?? []) as TransactionWithPatient[],
+                totalCount,
+                pageCount
+            }
+        }
     } catch (error) {
         return handleActionError(error)
     }

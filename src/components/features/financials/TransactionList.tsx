@@ -12,6 +12,7 @@ type TransactionListProps = {
     title?: string
     showPatient?: boolean
     emptyMessage?: string
+    viewAllLink?: string
 }
 
 const formatCurrency = (value: number): string => {
@@ -101,11 +102,17 @@ export function TransactionList({
     title = "Transacciones Recientes",
     showPatient = true,
     emptyMessage = "No hay transacciones registradas",
+    viewAllLink
 }: TransactionListProps) {
     return (
         <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle className="text-lg">{title}</CardTitle>
+                {viewAllLink && (
+                    <a href={viewAllLink} className="text-sm text-luxury-gold hover:underline">
+                        Ver todas
+                    </a>
+                )}
             </CardHeader>
             <CardContent>
                 {transactions.length === 0 ? (

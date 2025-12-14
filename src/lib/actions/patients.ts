@@ -8,9 +8,13 @@ import type { Tables } from "@/types/database"
 type Patient = Tables<"patients">
 
 /**
- * Get all patients for the current organization
+ * Get all patients for the current organization with pagination and search
  */
-export async function getPatients(): Promise<ActionResult<Patient[]>> {
+export async function getPatients(options: {
+    page?: number
+    limit?: number
+    query?: string
+} = {}): Promise<ActionResult<{ data: Patient[], totalCount: number, pageCount: number }>> {
     try {
         const supabase = await createClient()
         const orgId = await getOrgId()
@@ -19,15 +23,37 @@ export async function getPatients(): Promise<ActionResult<Patient[]>> {
             return { success: false, error: "No autorizado" }
         }
 
-        const { data, error } = await supabase
+        const page = options.page || 1
+        const limit = options.limit || 10
+        const queryStr = options.query || ""
+        const offset = (page - 1) * limit
+
+        let dbQuery = supabase
             .from("patients")
-            .select("*")
+            .select("*", { count: "exact" })
             .eq("organization_id", orgId)
+
+        if (queryStr) {
+            dbQuery = dbQuery.or(`full_name.ilike.%${queryStr}%,whatsapp_number.ilike.%${queryStr}%,email.ilike.%${queryStr}%`)
+        }
+
+        const { data, error, count } = await dbQuery
             .order("created_at", { ascending: false })
+            .range(offset, offset + limit - 1)
 
         if (error) throw error
 
-        return { success: true, data: data ?? [] }
+        const totalCount = count || 0
+        const pageCount = Math.ceil(totalCount / limit)
+
+        return {
+            success: true,
+            data: {
+                data: data ?? [],
+                totalCount,
+                pageCount
+            }
+        }
     } catch (error) {
         return handleActionError(error)
     }
@@ -166,7 +192,7 @@ export async function deletePatient(id: string): Promise<ActionResult<null>> {
 }
 
 /**
- * Search patients by name (fuzzy)
+ * Search patients by name (fuzzy) - Legacy, use getPatients({ query }) instead
  */
 export async function searchPatients(query: string): Promise<ActionResult<Patient[]>> {
     try {

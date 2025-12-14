@@ -98,9 +98,9 @@ async function RevenueChartSection() {
 
 async function RecentTransactions() {
     const result = await getTransactions({ limit: 10 })
-    const transactions = result.success ? result.data : []
+    const transactions = result.success ? result.data.data : []
 
-    return <TransactionList transactions={transactions} />
+    return <TransactionList transactions={transactions} viewAllLink="/admin/financials/transactions" />
 }
 
 export default function FinancialsPage() {

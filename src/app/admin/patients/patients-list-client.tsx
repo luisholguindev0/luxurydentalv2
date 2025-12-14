@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
     Users,
     Plus,
@@ -23,25 +23,51 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { Pagination } from "@/components/ui/pagination"
+
 type Patient = Tables<"patients">
 
 interface PatientsListClientProps {
     initialPatients: Patient[]
+    totalPages: number
+    totalCount: number
 }
 
-export function PatientsListClient({ initialPatients }: PatientsListClientProps) {
+export function PatientsListClient({ initialPatients, totalPages, totalCount }: PatientsListClientProps) {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+
+    // Sync state with server/URL
     const [patients, setPatients] = useState<Patient[]>(initialPatients)
-    const [searchQuery, setSearchQuery] = useState("")
+    const [searchQuery, setSearchQuery] = useState(searchParams.get("query") || "")
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [openMenu, setOpenMenu] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
-    const filteredPatients = patients.filter(
-        (patient) =>
-            patient.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            patient.whatsapp_number?.includes(searchQuery) ||
-            patient.email?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    // Update patients when server data changes
+    useEffect(() => {
+        setPatients(initialPatients)
+    }, [initialPatients])
+
+    // Update search query when URL changes (e.g. back button)
+    useEffect(() => {
+        setSearchQuery(searchParams.get("query") || "")
+    }, [searchParams])
+
+    // Debounced Search Effect
+    const handleSearch = (term: string) => {
+        setSearchQuery(term)
+        const params = new URLSearchParams(searchParams)
+        if (term) {
+            params.set("query", term)
+        } else {
+            params.delete("query")
+        }
+        params.set("page", "1") // Reset to page 1
+        router.replace(`${pathname}?${params.toString()}`)
+    }
 
     const handleDelete = async (id: string) => {
         if (!confirm("¿Está seguro que desea eliminar este paciente? Esta acción no se puede deshacer.")) {
@@ -74,7 +100,7 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
                             Pacientes
                         </h1>
                         <p className="text-text-muted text-sm mt-1">
-                            {patients.length} pacientes registrados
+                            {totalCount} pacientes registrados
                         </p>
                     </div>
                     <Link href="/admin/patients/new">
@@ -91,7 +117,7 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
                     <Input
                         placeholder="Buscar por nombre, teléfono o email..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => handleSearch(e.target.value)}
                         className="pl-10"
                     />
                 </div>
@@ -107,7 +133,7 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
-                {filteredPatients.length === 0 ? (
+                {patients.length === 0 ? (
                     searchQuery ? (
                         <EmptyState
                             icon={Search}
@@ -115,7 +141,7 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
                             description={`No se encontraron pacientes con "${searchQuery}"`}
                             action={{
                                 label: "Limpiar búsqueda",
-                                onClick: () => setSearchQuery("")
+                                onClick: () => handleSearch("")
                             }}
                         />
                     ) : (
@@ -151,7 +177,7 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {filteredPatients.map((patient) => (
+                                {patients.map((patient) => (
                                     <tr
                                         key={patient.id}
                                         className="hover:bg-white/5 transition-colors"
@@ -236,6 +262,12 @@ export function PatientsListClient({ initialPatients }: PatientsListClientProps)
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {patients.length > 0 && totalPages > 1 && (
+                    <div className="mt-4 pb-6">
+                        <Pagination totalPages={totalPages} />
                     </div>
                 )}
             </div>

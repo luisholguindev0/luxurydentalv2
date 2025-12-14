@@ -24,7 +24,14 @@ export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>
 /**
  * Get all leads for the current organization
  */
-export async function getLeads(): Promise<ActionResult<Lead[]>> {
+/**
+ * Get all leads for the current organization
+ */
+export async function getLeads(options: {
+    page?: number
+    limit?: number
+    query?: string
+} = {}): Promise<ActionResult<{ data: Lead[], totalCount: number, pageCount: number }>> {
     try {
         const supabase = await createClient()
         const orgId = await getOrgId()
@@ -33,15 +40,37 @@ export async function getLeads(): Promise<ActionResult<Lead[]>> {
             return { success: false, error: "No autorizado" }
         }
 
-        const { data, error } = await supabase
+        const page = options.page || 1
+        const limit = options.limit || 10
+        const queryStr = options.query || ""
+        const offset = (page - 1) * limit
+
+        let dbQuery = supabase
             .from("leads")
-            .select("*")
+            .select("*", { count: "exact" })
             .eq("organization_id", orgId)
+
+        if (queryStr) {
+            dbQuery = dbQuery.or(`name.ilike.%${queryStr}%,phone.ilike.%${queryStr}%`)
+        }
+
+        const { data, error, count } = await dbQuery
             .order("created_at", { ascending: false })
+            .range(offset, offset + limit - 1)
 
         if (error) throw error
 
-        return { success: true, data: data ?? [] }
+        const totalCount = count || 0
+        const pageCount = Math.ceil(totalCount / limit)
+
+        return {
+            success: true,
+            data: {
+                data: data ?? [],
+                totalCount,
+                pageCount
+            }
+        }
     } catch (error) {
         return handleActionError(error)
     }
